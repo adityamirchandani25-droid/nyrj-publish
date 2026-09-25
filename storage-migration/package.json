@@ -1,0 +1,15 @@
+{
+  "name": "storage-migration",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.1",
+    "dotenv": "^18.0.3"
+  }
+}

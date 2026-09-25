@@ -1,0 +1,31 @@
+# National Youth Research Journal (NYRJ)
+
+> NYRJ (ISSN 3143-3030) is an open-access, peer-reviewed, rolling-publication
+> academic journal that publishes original student research from middle school
+> through medical school, across every academic discipline. Founded by Madhav
+> Arora; co-founded by Keyaan. Published in Atlanta, Georgia, USA.
+
+All published articles are free to read, have permanent URLs of the form
+https://nyrj.org/article/<title-slug>, and expose a directly downloadable PDF
+at https://nyrj.org/api/public/article/<title-slug>/pdf
+
+## Core pages
+- [Home](https://nyrj.org/): journal overview and featured research
+- [Library / Archive](https://nyrj.org/archive): every published manuscript
+- [Submit a manuscript](https://nyrj.org/submit): submission requirements
+- [Author guidelines](https://nyrj.org/guidelines): formatting and citation rules
+- [Editing process](https://nyrj.org/editors): peer review and editorial workflow
+- [Journal metrics](https://nyrj.org/metrics): turnaround times and publication stats
+- [Advisory board](https://nyrj.org/advisors): academic and professional advisors
+- [Team](https://nyrj.org/team): editors, reviewers, and staff
+- [Chapters](https://nyrj.org/chapters): school chapters and chapter leads
+- [Events](https://nyrj.org/events): conferences and symposiums
+- [Guidance](https://nyrj.org/guidance): mentorship and video walkthroughs
+- [Contact](https://nyrj.org/contact): NYRJINFO@Gmail.com
+
+## Machine-readable
+- [Sitemap](https://nyrj.org/sitemap.xml)
+
+## Usage
+Content may be quoted and cited with attribution to the National Youth
+Research Journal (NYRJ), ISSN 3143-3030, including the article's permanent URL.

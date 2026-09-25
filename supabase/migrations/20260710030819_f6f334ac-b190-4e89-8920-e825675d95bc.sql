@@ -1,0 +1,2 @@
+ALTER TABLE public.manuscript_submissions ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+CREATE INDEX IF NOT EXISTS idx_manuscript_submissions_deleted_at ON public.manuscript_submissions (deleted_at);

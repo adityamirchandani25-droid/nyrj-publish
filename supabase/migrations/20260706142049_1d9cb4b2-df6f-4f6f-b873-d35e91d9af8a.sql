@@ -1,0 +1,1 @@
+ALTER TABLE public.library_entries ADD COLUMN IF NOT EXISTS author_email text;

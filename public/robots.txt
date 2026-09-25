@@ -1,0 +1,49 @@
+User-agent: *
+Allow: /
+
+# Google Scholar crawls with Googlebot — full text PDFs must stay open.
+User-agent: Googlebot
+Allow: /
+Allow: /api/public/article/
+
+User-agent: Googlebot-News
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# AI answer engines — allow so NYRJ is citable in AI search results.
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+Sitemap: https://nyrj.org/sitemap.xml

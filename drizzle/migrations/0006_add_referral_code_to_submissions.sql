@@ -1,0 +1,1 @@
+ALTER TABLE public.manuscript_submissions ADD COLUMN IF NOT EXISTS referral_code text NOT NULL DEFAULT '';

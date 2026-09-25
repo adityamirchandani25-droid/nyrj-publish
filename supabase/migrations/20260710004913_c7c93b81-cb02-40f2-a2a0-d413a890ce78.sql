@@ -1,0 +1,1 @@
+ALTER TABLE public.library_entries ADD COLUMN IF NOT EXISTS award_winner boolean NOT NULL DEFAULT false; ALTER TABLE public.library_entries ADD COLUMN IF NOT EXISTS award_label text;

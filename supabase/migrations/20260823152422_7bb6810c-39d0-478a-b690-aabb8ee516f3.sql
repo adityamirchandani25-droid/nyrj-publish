@@ -1,0 +1,1 @@
+ALTER TABLE public.editorial_team ADD COLUMN IF NOT EXISTS member_group text NOT NULL DEFAULT 'editorial';
