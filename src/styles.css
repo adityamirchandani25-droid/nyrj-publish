@@ -457,21 +457,18 @@ body::before {
   animation: page-unfold 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.page-canvas > section > * {
-  animation: ink-rise 680ms cubic-bezier(0.22, 1, 0.36, 1) both;
+.scroll-reveal-enabled [data-scroll-reveal-state="pending"] {
+  opacity: 0;
+  translate: 0 1.65rem;
 }
 
-.page-canvas > section > :nth-child(2) {
-  animation-delay: 70ms;
-}
-.page-canvas > section > :nth-child(3) {
-  animation-delay: 130ms;
-}
-.page-canvas > section > :nth-child(4) {
-  animation-delay: 190ms;
-}
-.page-canvas > section > :nth-child(n + 5) {
-  animation-delay: 240ms;
+.scroll-reveal-enabled [data-scroll-reveal-state="revealed"] {
+  opacity: 1;
+  translate: 0 0;
+  transition:
+    opacity 680ms cubic-bezier(0.22, 1, 0.36, 1),
+    translate 760ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--scroll-reveal-delay, 0ms);
 }
 
 .page-canvas article {
@@ -541,19 +538,6 @@ body::before {
   to {
     opacity: 1;
     transform: perspective(1100px) rotateX(0) translateY(0);
-  }
-}
-
-@keyframes ink-rise {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-    filter: blur(3px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
   }
 }
 
@@ -851,7 +835,6 @@ body::before {
 
 @media (prefers-reduced-motion: reduce) {
   .page-canvas,
-  .page-canvas > section > *,
   .editorial-loader__shadow,
   .editorial-loader__paper,
   .editorial-loader__rule::after,
@@ -861,10 +844,12 @@ body::before {
   }
 
   .page-canvas,
-  .page-canvas > section > * {
+  .scroll-reveal-enabled [data-scroll-reveal-state] {
     opacity: 1;
+    translate: none;
     transform: none;
     filter: none;
+    transition: none;
   }
 
   .page-canvas article,

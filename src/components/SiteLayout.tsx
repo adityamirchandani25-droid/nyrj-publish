@@ -1,4 +1,4 @@
-import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
+import { Link, Outlet, useNavigate } from "@tanstack/react-router";
 import { Moon, Sun } from "lucide-react";
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { getSession, logout, onAuthChange, type Session } from "@/lib/auth";
@@ -11,16 +11,13 @@ import {
   InstagramIcon,
   YouTubeIcon,
 } from "@/components/SocialLinks";
+import { ScrollRevealRegion } from "@/components/ScrollRevealRegion";
 
 export function SiteLayout({ children }: { children?: ReactNode }) {
-  const location = useLocation();
-
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <Header />
-      <main key={location.pathname} className="page-canvas flex-1">
-        {children ?? <Outlet />}
-      </main>
+      <ScrollRevealRegion>{children ?? <Outlet />}</ScrollRevealRegion>
       <Footer />
     </div>
   );
