@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { staffToken } from "@/lib/auth";
-import { listSentEmails, type SentEmailRow } from "@/lib/sent-emails.functions";
+import {
+  listSentEmails,
+  retryFailedEmails,
+  retrySentEmail,
+  type SentEmailRow,
+} from "@/lib/sent-emails.functions";
 
 const heading = "text-[10px] uppercase tracking-[0.18em] text-accent";
 const btnGhost =
@@ -12,6 +17,8 @@ export function SentEmails() {
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [view, setView] = useState<"preview" | "text">("preview");
+  const [retrying, setRetrying] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function load(term = search) {
     setError(null);
@@ -30,6 +37,42 @@ export function SentEmails() {
     void load("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function retryOne(id: string) {
+    setRetrying(id);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await retrySentEmail({ data: { staffToken: staffToken(), id } });
+      setNotice(result.sent === 1 ? "Email sent successfully." : "Nothing needed to be retried.");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not retry the email.");
+    } finally {
+      setRetrying(null);
+    }
+  }
+
+  async function retryAll() {
+    setRetrying("all");
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await retryFailedEmails({
+        data: { staffToken: staffToken(), limit: 50 },
+      });
+      setNotice(
+        result.attempted === 0
+          ? "There are no failed emails to retry."
+          : `Retried ${result.attempted}: ${result.sent} sent, ${result.failed} still failed.`,
+      );
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not retry failed emails.");
+    } finally {
+      setRetrying(null);
+    }
+  }
 
   const open = (rows ?? []).find((r) => r.id === openId) ?? null;
 
@@ -57,9 +100,17 @@ export function SentEmails() {
         >
           Refresh
         </button>
+        <button
+          className={btnGhost}
+          disabled={retrying !== null || !(rows ?? []).some((row) => row.status === "failed")}
+          onClick={() => void retryAll()}
+        >
+          {retrying === "all" ? "Retrying…" : "Retry failed"}
+        </button>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
+      {notice && <p className="text-sm text-accent">{notice}</p>}
       {rows === null && <p className="text-sm text-muted-foreground">Loading…</p>}
       {rows !== null && rows.length === 0 && (
         <p className="text-sm text-muted-foreground italic">No emails recorded yet.</p>
@@ -83,9 +134,7 @@ export function SentEmails() {
               </div>
               <div className="mt-1 text-[11px] text-muted-foreground">
                 To {r.to_email} · {r.template}
-                {r.status !== "sent" && (
-                  <span className="text-destructive"> · {r.status}</span>
-                )}
+                {r.status !== "sent" && <span className="text-destructive"> · {r.status}</span>}
               </div>
             </button>
 
@@ -107,6 +156,15 @@ export function SentEmails() {
                   >
                     Plain text
                   </button>
+                  {r.status === "failed" && (
+                    <button
+                      className={btnGhost}
+                      disabled={retrying !== null}
+                      onClick={() => void retryOne(r.id)}
+                    >
+                      {retrying === r.id ? "Retrying…" : "Retry email"}
+                    </button>
+                  )}
                 </div>
                 {view === "preview" ? (
                   <iframe
