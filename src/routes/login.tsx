@@ -10,6 +10,7 @@ import {
   onAuthChange,
   resendStudentConfirmation,
   signInStudent,
+  signInStudentWithGoogle,
   signUpStudent,
   type Role,
   type Session,
@@ -81,6 +82,7 @@ function LoginPage() {
           : null;
   const [role, setRole] = useState<Role | null>(searchRole);
   const [current, setCurrent] = useState<Session | null>(null);
+  const [oauthError, setOauthError] = useState<string | null>(null);
 
   useEffect(() => {
     bridgeSupabaseSession();
@@ -91,6 +93,20 @@ function LoginPage() {
   useEffect(() => {
     setRole(searchRole);
   }, [searchRole]);
+
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const query = new URLSearchParams(window.location.search);
+    const description = hash.get("error_description") ?? query.get("error_description");
+    const oauthFailure = hash.get("error") ?? query.get("error");
+    if (description || oauthFailure) {
+      setOauthError(
+        description?.replace(/\+/g, " ") ??
+          "Google sign-in was cancelled or could not be completed. Please try again.",
+      );
+      window.history.replaceState(null, "", "/login");
+    }
+  }, []);
 
   function chooseRole(nextRole: Role | null) {
     setRole(nextRole);
@@ -163,6 +179,11 @@ function LoginPage() {
         <p className="text-[10px] uppercase tracking-[0.35em] text-accent">Account Access</p>
         <h2 className="font-serif text-4xl sm:text-5xl text-primary mt-3">Log In</h2>
         <p className="mt-3 text-muted-foreground">Choose how you'd like to sign in.</p>
+        {oauthError && (
+          <p className="mt-5 border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {oauthError}
+          </p>
+        )}
 
         {role === null && (
           <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -368,6 +389,19 @@ function StudentOtpForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [notice, setNotice] = useState<string | null>(null);
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
 
+  async function signInWithGoogle() {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await signInStudentWithGoogle();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Google sign-in failed.";
+      setError(isServiceOutage(msg) ? OUTAGE_MESSAGE : msg);
+      setBusy(false);
+    }
+  }
+
   async function resendConfirmation() {
     const normalized = email.trim().toLowerCase();
     if (!normalized) {
@@ -555,6 +589,27 @@ function StudentOtpForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
         {mode === "login" ? "Student Login" : "Student Sign Up"}
       </p>
 
+      {step === "auth" && (
+        <>
+          <button
+            type="button"
+            onClick={signInWithGoogle}
+            disabled={busy}
+            className="flex w-full items-center justify-center gap-3 border border-border bg-background px-5 py-3 text-sm font-medium text-foreground transition hover:border-accent hover:bg-secondary disabled:opacity-50"
+          >
+            <GoogleIcon />
+            {busy ? "Opening Google…" : "Continue with Google"}
+          </button>
+          <div className="flex items-center gap-3" aria-hidden="true">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              or use email
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      )}
+
       {step === "auth" && mode === "login" && (
         <form onSubmit={submitLogin} className="space-y-4">
           <FieldRow
@@ -688,6 +743,29 @@ function StudentOtpForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
         </form>
       )}
     </div>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 shrink-0">
+      <path
+        fill="#4285F4"
+        d="M21.6 12.23c0-.71-.06-1.4-.18-2.07H12v3.92h5.38a4.6 4.6 0 0 1-2 3.02v2.54h3.24c1.9-1.75 2.98-4.33 2.98-7.4Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 22c2.7 0 4.98-.9 6.63-2.36l-3.24-2.54c-.9.6-2.05.96-3.39.96-2.61 0-4.82-1.76-5.61-4.13H3.04v2.62A10 10 0 0 0 12 22Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M6.39 13.93A6.02 6.02 0 0 1 6.08 12c0-.67.12-1.32.31-1.93V7.45H3.04A10 10 0 0 0 2 12c0 1.61.39 3.14 1.04 4.55l3.35-2.62Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.94c1.47 0 2.79.5 3.83 1.5l2.87-2.88A9.62 9.62 0 0 0 12 2a10 10 0 0 0-8.96 5.45l3.35 2.62C7.18 7.7 9.39 5.94 12 5.94Z"
+      />
+    </svg>
   );
 }
 

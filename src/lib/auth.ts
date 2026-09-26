@@ -190,6 +190,19 @@ export async function signInStudent(email: string, password: string) {
   return data;
 }
 
+export async function signInStudentWithGoogle() {
+  if (typeof window === "undefined")
+    throw new Error("Google sign-in is only available in a browser.");
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${window.location.origin}/login`,
+    },
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function resendStudentConfirmation(email: string) {
   const normalized = email.trim().toLowerCase();
   const emailRedirectTo =
@@ -222,23 +235,47 @@ export function bridgeSupabaseSession() {
   if (bridged || typeof window === "undefined") return;
   bridged = true;
 
-  const apply = (email: string | undefined) => {
+  const ensureProfile = async (user: {
+    id: string;
+    email?: string;
+    user_metadata?: Record<string, unknown>;
+  }) => {
+    if (!user.email) return;
+    const metadataName = user.user_metadata?.full_name ?? user.user_metadata?.name;
+    const fullName = typeof metadataName === "string" ? metadataName.trim() : "";
+    const { error } = await supabase.from("profiles").upsert(
+      {
+        id: user.id,
+        email: user.email,
+        full_name: fullName || null,
+      },
+      { onConflict: "id", ignoreDuplicates: true },
+    );
+    if (error) console.error("[auth] Failed to create researcher profile:", error.message);
+  };
+
+  const apply = async (
+    user:
+      { id: string; email?: string; user_metadata?: Record<string, unknown> } | null | undefined,
+  ) => {
     const current = getSession();
-    if (email) {
-      // Don't overwrite an active staff session.
-      if (current?.role === "staff") return;
-      if (current?.role === "researcher" && current.username === email) return;
-      writeSession({ role: "researcher", username: email, loggedInAt: Date.now() });
+    if (user?.email) {
+      // Don't overwrite one of the app's separate privileged/shared sessions.
+      if (current?.role === "staff" || current?.role === "ambassador") return;
+      await ensureProfile(user);
+      if (getSession()?.role === "staff" || getSession()?.role === "ambassador") return;
+      if (current?.role === "researcher" && current.username === user.email) return;
+      writeSession({ role: "researcher", username: user.email, loggedInAt: Date.now() });
     } else if (current?.role === "researcher") {
       writeSession(null);
     }
   };
 
   supabase.auth.getSession().then(({ data }) => {
-    apply(data.session?.user.email ?? undefined);
+    void apply(data.session?.user);
   });
 
   supabase.auth.onAuthStateChange((_event, session) => {
-    apply(session?.user.email ?? undefined);
+    void apply(session?.user);
   });
 }
