@@ -113,9 +113,21 @@ function ReviewerAuth() {
       </p>
       <form onSubmit={submit} className="mt-5 space-y-4">
         <Field label="Reviewer email" type="email" value={email} onChange={setEmail} />
-        <Field label="Password" type="password" value={password} onChange={setPassword} />
+        <Field
+          label="Password"
+          type="password"
+          value={password}
+          onChange={setPassword}
+          minLength={mode === "signup" ? 8 : 1}
+        />
         {mode === "signup" && (
-          <Field label="Access code" type="password" value={accessCode} onChange={setAccessCode} />
+          <Field
+            label="Access code"
+            type="password"
+            value={accessCode}
+            onChange={setAccessCode}
+            minLength={4}
+          />
         )}
         {error && <p className="text-sm text-destructive">{error}</p>}
         {notice && <p className="text-sm text-primary">{notice}</p>}
@@ -145,11 +157,13 @@ function Field({
   value,
   onChange,
   type = "text",
+  minLength,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  minLength?: number;
 }) {
   return (
     <label className="block">
@@ -158,7 +172,7 @@ function Field({
         required
         type={type}
         value={value}
-        minLength={type === "password" ? 8 : undefined}
+        minLength={minLength}
         onChange={(event) => onChange(event.target.value)}
         className={`${input} mt-1`}
       />
