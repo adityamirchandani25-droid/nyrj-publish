@@ -147,24 +147,7 @@ function LoginPage() {
 
           {isResearcher(current) && (
             <>
-              <section className="mt-10 border border-border bg-card p-6">
-                <p className="text-[10px] uppercase tracking-[0.25em] text-accent">
-                  Author Guidelines
-                </p>
-                <h3 className="mt-2 font-serif text-2xl text-primary">Prepare your manuscript</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Review the required manuscript structure, title-page format, references, and
-                  submission formatting before uploading your paper.
-                </p>
-                <a
-                  href="/docs/author-guidelines.pdf"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-4 inline-block px-5 py-2.5 border border-primary text-primary text-xs uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition"
-                >
-                  Open Author Guidelines PDF
-                </a>
-              </section>
+              <AuthorGuidelinesPanel />
               <SubmissionTracker email={current.username} />
             </>
           )}
@@ -271,8 +254,41 @@ function LoginPage() {
             onSuccess={() => navigate({ to: "/ambassador" })}
           />
         )}
+
+        <AuthorGuidelinesPanel />
       </section>
     </SiteLayout>
+  );
+}
+
+function AuthorGuidelinesPanel() {
+  return (
+    <section className="mt-10 border border-border bg-card p-6">
+      <p className="text-[10px] uppercase tracking-[0.25em] text-accent">Author Guidelines</p>
+      <h3 className="mt-2 font-serif text-2xl text-primary">Prepare your manuscript</h3>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Review the required manuscript structure, title-page format, approved reference styles, and
+        submission formatting before uploading your paper. No login is required to view or download
+        the guide.
+      </p>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <a
+          href="/docs/author-guidelines.pdf"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-block px-5 py-2.5 bg-primary text-primary-foreground text-xs uppercase tracking-[0.2em] hover:bg-accent transition"
+        >
+          Open Author Guidelines PDF
+        </a>
+        <a
+          href="/docs/author-guidelines.pdf"
+          download="NYRJ-Author-Guidelines.pdf"
+          className="inline-block px-5 py-2.5 border border-primary text-primary text-xs uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition"
+        >
+          Download PDF
+        </a>
+      </div>
+    </section>
   );
 }
 

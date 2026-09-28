@@ -102,6 +102,23 @@ function Guidelines() {
           formatting, structural, and integrity requirements. Manuscripts that do not follow these
           guidelines may be returned without review.
         </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <a
+            href="/docs/author-guidelines.pdf"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-block px-5 py-2.5 bg-primary text-primary-foreground text-xs uppercase tracking-[0.2em] hover:bg-accent transition"
+          >
+            Open Author Guidelines PDF
+          </a>
+          <a
+            href="/docs/author-guidelines.pdf"
+            download="NYRJ-Author-Guidelines.pdf"
+            className="inline-block px-5 py-2.5 border border-primary text-primary text-xs uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition"
+          >
+            Download PDF
+          </a>
+        </div>
 
         {/* Formatting */}
         <section className="mt-12 border-t-2 border-primary pt-8">
