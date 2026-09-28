@@ -65,7 +65,8 @@ export async function assignInitialReviewer(
   // Let them know.
   try {
     const { sendTemplateEmail } = await import("./email-templates/send-email");
-    const siteUrl = process.env.PUBLIC_SITE_URL || "https://nyrj.org";
+    const { publicSiteUrl } = await import("./site-url.server");
+    const siteUrl = publicSiteUrl();
     await sendTemplateEmail("initial-review-assignment", pick.email, {
       idempotencyKey: `initial-review-${submissionId}-${pick.email}`,
       replyTo: "NYRJINFO@gmail.com",

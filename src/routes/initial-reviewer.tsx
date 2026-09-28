@@ -30,12 +30,31 @@ const secondaryButton =
 function InitialReviewerPage() {
   const [ready, setReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data }) => {
+    const establishSession = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const tokenHash = params.get("token_hash");
+      const type = params.get("type");
+      if (tokenHash && ["signup", "magiclink"].includes(type ?? "")) {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: type as "signup" | "magiclink",
+        });
+        if (verifyError) {
+          setLinkError(
+            "This account link is invalid or has expired. Please create the account again.",
+          );
+        } else {
+          window.history.replaceState({}, "", window.location.pathname);
+        }
+      }
+      const { data } = await supabase.auth.getSession();
       setSignedIn(Boolean(data.session));
       setReady(true);
-    });
+    };
+    void establishSession();
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setSignedIn(Boolean(session));
       setReady(true);
@@ -57,21 +76,25 @@ function InitialReviewerPage() {
         ) : signedIn ? (
           <ReviewerDesk />
         ) : (
-          <ReviewerAuth />
+          <ReviewerAuth initialError={linkError} />
         )}
       </section>
     </SiteLayout>
   );
 }
 
-function ReviewerAuth() {
+function ReviewerAuth({ initialError }: { initialError?: string | null }) {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [accessCode, setAccessCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError ?? null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialError) setError(initialError);
+  }, [initialError]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

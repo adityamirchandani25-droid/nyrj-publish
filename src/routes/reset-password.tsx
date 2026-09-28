@@ -37,9 +37,32 @@ function ResetPassword() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    const params = new URLSearchParams(window.location.search);
+    const tokenHash = params.get("token_hash");
+    const type = params.get("type");
+    const establishSession = async () => {
+      if (tokenHash && type === "recovery") {
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: "recovery",
+        });
+        if (verifyError) {
+          setError("This password link is invalid or has expired. Please request a new one.");
+          return;
+        }
+        params.delete("token_hash");
+        params.delete("type");
+        const cleanQuery = params.toString();
+        window.history.replaceState(
+          {},
+          "",
+          `${window.location.pathname}${cleanQuery ? `?${cleanQuery}` : ""}`,
+        );
+      }
+      const { data } = await supabase.auth.getSession();
       setReady(Boolean(data.session));
-    });
+    };
+    void establishSession();
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       if (session) setReady(true);
     });
@@ -86,17 +109,20 @@ function ResetPassword() {
             Password updated. Taking you back to the journal…
           </p>
         ) : !ready ? (
-          <p className="mt-6 text-sm text-muted-foreground">
-            Open this page from the reset link we emailed you. If the link has expired, request a
-            new one from the{" "}
-            <a
-              href={initialReviewer ? "/initial-reviewer" : "/login?account=student"}
-              className="text-accent underline underline-offset-4"
-            >
-              {initialReviewer ? "initial reviewer login page" : "student login page"}
-            </a>
-            .
-          </p>
+          <div className="mt-6 text-sm text-muted-foreground">
+            {error && <p className="mb-3 text-destructive">{error}</p>}
+            <p>
+              Open this page from the reset link we emailed you. If the link has expired, request a
+              new one from the{" "}
+              <a
+                href={initialReviewer ? "/initial-reviewer" : "/login?account=student"}
+                className="text-accent underline underline-offset-4"
+              >
+                {initialReviewer ? "initial reviewer login page" : "student login page"}
+              </a>
+              .
+            </p>
+          </div>
         ) : (
           <form onSubmit={submit} className="mt-8 space-y-4 border border-border bg-card p-6">
             <label className="block">

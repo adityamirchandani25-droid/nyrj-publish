@@ -84,6 +84,20 @@ function accessCodeMatches(candidate: string): boolean {
   return timingSafeEqual(left, right);
 }
 
+function reviewerActionUrl(
+  siteUrl: string,
+  path: string,
+  properties: { hashed_token?: string; verification_type?: string } | null | undefined,
+): string | null {
+  const tokenHash = properties?.hashed_token;
+  const type = properties?.verification_type;
+  if (!tokenHash || !type) return null;
+  const url = new URL(path, `${siteUrl}/`);
+  url.searchParams.set("token_hash", tokenHash);
+  url.searchParams.set("type", type);
+  return url.toString();
+}
+
 /**
  * Creates the reviewer auth account and sends its verification link through
  * the journal's managed email pipeline. generateLink deliberately does not
@@ -135,7 +149,8 @@ export const createInitialReviewerAccount = createServerFn({ method: "POST" })
         .replace(/\b\w/g, (letter) => letter.toUpperCase()) ||
       "Reviewer";
 
-    const siteUrl = (process.env.PUBLIC_SITE_URL || "https://nyrj.org").replace(/\/+$/, "");
+    const { publicSiteUrl } = await import("./site-url.server");
+    const siteUrl = publicSiteUrl();
     const redirectTo = `${siteUrl}/initial-reviewer`;
     const setupFailed = "We could not start account setup. Please try again or contact NYRJ staff.";
     const { admin } = supabaseAdmin.auth;
@@ -162,7 +177,7 @@ export const createInitialReviewerAccount = createServerFn({ method: "POST" })
     }
 
     const user = link.data.user;
-    let actionLink = link.data.properties?.action_link;
+    let actionLink = reviewerActionUrl(siteUrl, "/initial-reviewer", link.data.properties);
     if (link.error || !user || !actionLink) {
       console.error("[initial-reviewer] account link generation failed:", link.error);
       throw new Error(setupFailed);
@@ -194,7 +209,11 @@ export const createInitialReviewerAccount = createServerFn({ method: "POST" })
         options: { redirectTo: `${siteUrl}/reset-password?next=initial-reviewer` },
       });
       const recoveryUser = recovery.data.user;
-      const recoveryLink = recovery.data.properties?.action_link;
+      const recoveryLink = reviewerActionUrl(
+        siteUrl,
+        "/reset-password?next=initial-reviewer",
+        recovery.data.properties,
+      );
       if (recovery.error || !recoveryUser || !recoveryLink || recoveryUser.id !== user.id) {
         console.error("[initial-reviewer] password setup link failed:", recovery.error);
         throw new Error(setupFailed);
@@ -425,7 +444,8 @@ export const submitInitialReview = createServerFn({ method: "POST" })
 
     try {
       const { sendTemplateEmailToMany } = await import("./email-templates/send-email");
-      const dashboardUrl = `${process.env.PUBLIC_SITE_URL || "https://nyrj.org"}/admin/submissions`;
+      const { publicSiteUrl } = await import("./site-url.server");
+      const dashboardUrl = `${publicSiteUrl()}/admin/submissions`;
       const stamp = Date.now();
       await sendTemplateEmailToMany("editor-recommendation", STAFF_RECIPIENTS, (to) => ({
         idempotencyKey: `initial-review-${data.submissionId}-${reviewer.id}-${stamp}-${to}`,
