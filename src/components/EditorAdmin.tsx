@@ -46,7 +46,6 @@ function EditorAccounts() {
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function decide(id: string, status: "approved" | "rejected") {
@@ -137,7 +136,6 @@ function EditorRecommendations() {
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function openRow(r: RecommendationRow) {

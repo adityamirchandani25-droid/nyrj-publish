@@ -5,7 +5,8 @@ import { timingSafeEqual, createHash } from "crypto";
 
 function ambassadorPassword(): string {
   const p = process.env.AMBASSADOR_PASSWORD;
-  if (!p) throw new Error("Ambassador sign-in is not configured. Please contact NYRJINFO@Gmail.com.");
+  if (!p)
+    throw new Error("Ambassador sign-in is not configured. Please contact NYRJINFO@Gmail.com.");
   return p;
 }
 

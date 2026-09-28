@@ -5,10 +5,21 @@ export const Route = createFileRoute("/submit/")({
   head: () => ({
     meta: [
       { title: "Submit a Manuscript — NYRJ" },
-      { name: "description", content: "Start a submission to the National Youth Research Journal — what to prepare before opening the manuscript form." },
-      { name: "keywords", content: "submit student research, submit manuscript student journal, publish high school research, student research submission, youth research journal submission, publish student paper" },
+      {
+        name: "description",
+        content:
+          "Start a submission to the National Youth Research Journal — what to prepare before opening the manuscript form.",
+      },
+      {
+        name: "keywords",
+        content:
+          "submit student research, submit manuscript student journal, publish high school research, student research submission, youth research journal submission, publish student paper",
+      },
       { property: "og:title", content: "Submit a Manuscript to NYRJ" },
-      { property: "og:description", content: "What to have ready before submitting to the National Youth Research Journal." },
+      {
+        property: "og:description",
+        content: "What to have ready before submitting to the National Youth Research Journal.",
+      },
       { property: "og:url", content: "https://nyrj.org/submit" },
     ],
     links: [{ rel: "canonical", href: "https://nyrj.org/submit" }],
@@ -47,7 +58,8 @@ function Submit() {
             "Conflict of interest, funding, and AI-use disclosures",
           ].map((r) => (
             <li key={r} className="border border-border bg-card px-3 py-2">
-              <span className="text-accent mr-2">§</span>{r}
+              <span className="text-accent mr-2">§</span>
+              {r}
             </li>
           ))}
         </ul>
@@ -61,7 +73,6 @@ function Submit() {
             you and let you know when a PDF version is required.
           </p>
         </div>
-
 
         <div className="mt-10 border-t-2 border-primary pt-6">
           <h3 className="font-serif text-2xl text-primary mb-4">Start Your Submission</h3>
@@ -80,7 +91,10 @@ function Submit() {
 
           <p className="mt-6 text-xs text-muted-foreground italic">
             Trouble with the form? Email{" "}
-            <a href="mailto:NYRJINFO@gmail.com" className="text-primary underline underline-offset-2">
+            <a
+              href="mailto:NYRJINFO@gmail.com"
+              className="text-primary underline underline-offset-2"
+            >
               NYRJINFO@gmail.com
             </a>
             .

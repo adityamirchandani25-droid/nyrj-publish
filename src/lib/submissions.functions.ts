@@ -49,7 +49,10 @@ export const editorUpsertSubmission = createServerFn({ method: "POST" })
       )
       .select()
       .single();
-    if (error) { console.error("[server] supabase error:", error); throw new Error("An unexpected error occurred. Please try again."); }
+    if (error) {
+      console.error("[server] supabase error:", error);
+      throw new Error("An unexpected error occurred. Please try again.");
+    }
     return row as SubmissionRow;
   });
 
@@ -69,7 +72,10 @@ export const editorListByEmail = createServerFn({ method: "POST" })
       .select("*")
       .eq("student_email", data.studentEmail.trim().toLowerCase())
       .order("updated_at", { ascending: false });
-    if (error) { console.error("[server] supabase error:", error); throw new Error("An unexpected error occurred. Please try again."); }
+    if (error) {
+      console.error("[server] supabase error:", error);
+      throw new Error("An unexpected error occurred. Please try again.");
+    }
     return (rows ?? []) as SubmissionRow[];
   });
 
@@ -85,6 +91,9 @@ export const editorDeleteSubmission = createServerFn({ method: "POST" })
     verifyStaffToken(data.staffToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("submissions").delete().eq("id", data.id);
-    if (error) { console.error("[server] supabase error:", error); throw new Error("An unexpected error occurred. Please try again."); }
+    if (error) {
+      console.error("[server] supabase error:", error);
+      throw new Error("An unexpected error occurred. Please try again.");
+    }
     return { ok: true as const };
   });

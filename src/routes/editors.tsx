@@ -1,14 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SiteLayout } from "@/components/SiteLayout";
 
-
 export const Route = createFileRoute("/editors")({
   head: () => ({
     meta: [
       { title: "Peer Review & Editing Process — NYRJ" },
-      { name: "description", content: "How NYRJ peer review works: initial reviewer, section editor, author revision, and copy editor — plus how to apply as an editor." },
+      {
+        name: "description",
+        content:
+          "How NYRJ peer review works: initial reviewer, section editor, author revision, and copy editor — plus how to apply as an editor.",
+      },
       { property: "og:title", content: "NYRJ Peer Review & Editing Process" },
-      { property: "og:description", content: "The full path a manuscript takes at NYRJ, from initial review through publication." },
+      {
+        property: "og:description",
+        content:
+          "The full path a manuscript takes at NYRJ, from initial review through publication.",
+      },
       { property: "og:url", content: "https://nyrj.org/editors" },
     ],
     links: [{ rel: "canonical", href: "https://nyrj.org/editors" }],
@@ -17,8 +24,6 @@ export const Route = createFileRoute("/editors")({
 });
 
 function Editors() {
-
-
   return (
     <SiteLayout>
       <section className="mx-auto max-w-4xl px-6 py-16">
@@ -27,9 +32,11 @@ function Editors() {
           Peer Review & Editing Process
         </h1>
         <p className="mt-4 text-muted-foreground max-w-2xl">
-          The <em>National Youth Research Journal</em> is a <strong>peer-reviewed</strong> publication.
-          Every manuscript undergoes evaluation by a series of reviewers before
-          acceptance. Below is the full path a manuscript takes starting from submission to publication. The entire process is usually 2-3 weeks. However, based on the amount of publications it can be extended to 2 months.
+          The <em>National Youth Research Journal</em> is a <strong>peer-reviewed</strong>{" "}
+          publication. Every manuscript undergoes evaluation by a series of reviewers before
+          acceptance. Below is the full path a manuscript takes starting from submission to
+          publication. The entire process is usually 2-3 weeks. However, based on the amount of
+          publications it can be extended to 2 months.
         </p>
 
         <div className="mt-14">
@@ -67,12 +74,12 @@ function Editors() {
           <h3 className="font-serif text-2xl text-primary">Apply to Join Our Editorial Team</h3>
           <p className="mt-3 text-muted-foreground max-w-2xl">
             We welcome applications from students of all ages with strong academic writing skills,
-            attention to detail, and a passion for research. Prior editorial or review experience
-            is helpful but not required.
+            attention to detail, and a passion for research. Prior editorial or review experience is
+            helpful but not required.
           </p>
           <p className="mt-4 text-sm">
-            To inquire about open positions, send a brief statement of interest and your grade / school
-            to:{" "}
+            To inquire about open positions, send a brief statement of interest and your grade /
+            school to:{" "}
             <a
               href="mailto:NYRJINFO@gmail.com"
               className="text-primary underline underline-offset-4 hover:text-accent"
@@ -81,7 +88,6 @@ function Editors() {
             </a>
           </p>
         </div>
-
       </section>
     </SiteLayout>
   );
@@ -106,9 +112,7 @@ function Timeline({ steps }: { steps: { title: string; body: string }[] }) {
               <h3 className="font-serif text-xl sm:text-2xl text-primary leading-snug">
                 {step.title}
               </h3>
-              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-                {step.body}
-              </p>
+              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{step.body}</p>
             </div>
           </div>
         ))}
@@ -116,4 +120,3 @@ function Timeline({ steps }: { steps: { title: string; body: string }[] }) {
     </div>
   );
 }
-

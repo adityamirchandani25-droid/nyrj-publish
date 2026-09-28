@@ -14,6 +14,9 @@ const serverEnv = loadEnv(process.env["NODE_ENV"] ?? "development", process.cwd(
 Object.assign(process.env, serverEnv);
 
 export default defineConfig({
+  // This repository deploys to Vercel. Pinning the Nitro target prevents local
+  // and CI production builds from falling back to Lovable's Cloudflare preset.
+  nitro: { preset: "vercel" },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
@@ -22,8 +25,14 @@ export default defineConfig({
   vite: {
     resolve: {
       alias: {
-        "entities/lib/decode.js": path.resolve(process.cwd(), "node_modules/entities/lib/decode.js"),
-        "entities/lib/encode.js": path.resolve(process.cwd(), "node_modules/entities/lib/encode.js"),
+        "entities/lib/decode.js": path.resolve(
+          process.cwd(),
+          "node_modules/entities/lib/decode.js",
+        ),
+        "entities/lib/encode.js": path.resolve(
+          process.cwd(),
+          "node_modules/entities/lib/encode.js",
+        ),
         entities: path.resolve(process.cwd(), "node_modules/entities"),
       },
     },

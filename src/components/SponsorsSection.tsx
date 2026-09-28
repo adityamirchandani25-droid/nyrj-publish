@@ -31,7 +31,9 @@ export function SponsorsSection() {
   const [err, setErr] = useState("");
 
   const [name, setName] = useState("");
-  const [tier, setTier] = useState<"founding" | "partner" | "gold" | "silver" | "bronze" | "supporter">("supporter");
+  const [tier, setTier] = useState<
+    "founding" | "partner" | "gold" | "silver" | "bronze" | "supporter"
+  >("supporter");
   const [website, setWebsite] = useState("");
   const [blurb, setBlurb] = useState("");
   const [logo, setLogo] = useState<File | null>(null);
@@ -51,6 +53,7 @@ export function SponsorsSection() {
     reload();
     setSession(getSession());
     return onAuthChange(setSession);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const staff = isStaff(session);
@@ -96,7 +99,7 @@ export function SponsorsSection() {
     return (
       <section className="mt-16 border-t border-border pt-8">
         <h2 className="font-serif text-2xl text-primary">Sponsors &amp; supporters</h2>
-      <SponsorSpotlight />
+        <SponsorSpotlight />
         <p className="mt-3 text-sm text-foreground/85 leading-relaxed">
           NYRJ is free to read and free to submit to. Sponsors help keep it that way. Sponsors have
           no influence over peer review or editorial decisions.
@@ -275,7 +278,10 @@ function SponsorSpotlight() {
           </p>
           <span className="mt-3 inline-flex items-center gap-2 text-sm text-primary underline underline-offset-4 group-hover:text-accent">
             researchsparkhub.com
-            <span aria-hidden className="transition-transform duration-300 group-hover:translate-x-1">
+            <span
+              aria-hidden
+              className="transition-transform duration-300 group-hover:translate-x-1"
+            >
               →
             </span>
           </span>

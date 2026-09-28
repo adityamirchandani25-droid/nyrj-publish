@@ -93,7 +93,7 @@ function ReviewPage() {
         <p className={label}>Peer Review</p>
         <h1 className="font-serif text-4xl sm:text-5xl text-primary mt-3">Reviewer Portal</h1>
         {token ? (
-          <InvitePanel token={token} />
+          <ReviewerAccountPanel inviteToken={token} />
         ) : reset ? (
           <ResetPasswordForm token={reset} />
         ) : (
@@ -106,7 +106,7 @@ function ReviewPage() {
 
 /* --------------------------- invitation by link --------------------------- */
 
-function InvitePanel({ token }: { token: string }) {
+function InvitePanel({ token, session }: { token: string; session: ReviewerSession }) {
   const [invite, setInvite] = useState<InviteView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -117,7 +117,7 @@ function InvitePanel({ token }: { token: string }) {
 
   async function load() {
     try {
-      const v = await getInvite({ data: { token } });
+      const v = await getInvite({ data: { token, reviewerToken: session.token } });
       setInvite(v);
       setLoadError(null);
       // Never overwrite text the reviewer has already typed.
@@ -134,7 +134,7 @@ function InvitePanel({ token }: { token: string }) {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [token, session.token]);
 
   if (loadError && !invite) return <p className="mt-8 text-sm text-destructive">{loadError}</p>;
   if (!invite) return <p className="mt-8 text-sm text-muted-foreground">Loading…</p>;
@@ -149,7 +149,7 @@ function InvitePanel({ token }: { token: string }) {
     setBusy(true);
     setError(null);
     try {
-      await respondToInvite({ data: { token, accept } });
+      await respondToInvite({ data: { token, reviewerToken: session.token, accept } });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
@@ -163,7 +163,7 @@ function InvitePanel({ token }: { token: string }) {
     setBusy(true);
     setError(null);
     try {
-      await submitReview({ data: { token, comments } });
+      await submitReview({ data: { token, reviewerToken: session.token, comments } });
       setDone("Thank you — your review has been sent to our editorial team.");
       await load();
     } catch (err) {
@@ -271,7 +271,7 @@ function InvitePanel({ token }: { token: string }) {
 
 /* ------------------------ reviewer account + inbox ------------------------ */
 
-function ReviewerAccountPanel() {
+function ReviewerAccountPanel({ inviteToken }: { inviteToken?: string }) {
   const [session, setSession] = useState<ReviewerSession | null>(null);
   const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
   const [ready, setReady] = useState(false);
@@ -283,13 +283,36 @@ function ReviewerAccountPanel() {
 
   if (!ready) return null;
 
+  if (session && inviteToken) {
+    return (
+      <div className="mt-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Signed in as <span className="text-primary">{session.name}</span> ({session.email})
+          </p>
+          <button
+            className={btnGhost}
+            onClick={() => {
+              window.localStorage.removeItem(RSESSION);
+              setSession(null);
+            }}
+          >
+            Switch reviewer account
+          </button>
+        </div>
+        <InvitePanel token={inviteToken} session={session} />
+      </div>
+    );
+  }
+
   if (session) return <ReviewerInbox session={session} onLogout={() => setSession(null)} />;
 
   return (
     <div className="mt-8">
       <p className="text-sm text-muted-foreground leading-relaxed">
-        Peer reviewers sign in here to see the manuscripts assigned to them. New reviewers can
-        request an account — our editorial staff approves each request before access is granted.
+        {inviteToken
+          ? "Sign in with the reviewer account matching this invitation. If you do not have an account yet, request one below; editorial staff must approve it before you can open the manuscript or respond."
+          : "Peer reviewers sign in here to see the manuscripts assigned to them. New reviewers can request an account — our editorial staff approves each request before access is granted."}
       </p>
       <div className="mt-6 flex gap-3">
         <button
@@ -637,7 +660,9 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
   async function act(row: ReviewerAssignmentView, accept: boolean) {
     setBusy(true);
     try {
-      await respondToInvite({ data: { token: row.token, accept } });
+      await respondToInvite({
+        data: { token: row.token, reviewerToken: session.token, accept },
+      });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
@@ -650,7 +675,9 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
     setBusy(true);
     setNote(null);
     try {
-      await submitReview({ data: { token: row.token, comments: draft } });
+      await submitReview({
+        data: { token: row.token, reviewerToken: session.token, comments: draft },
+      });
       setNote("Thank you — your review was sent to our editorial team.");
       setOpenId(null);
       await load();

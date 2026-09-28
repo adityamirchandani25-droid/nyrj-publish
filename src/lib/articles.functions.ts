@@ -35,7 +35,7 @@ export const getArticleBySlug = createServerFn({ method: "GET" })
   .inputValidator((d: unknown) => z.object({ slug: z.string().min(1).max(300) }).parse(d))
   .handler(async ({ data }): Promise<ArticleRow | null> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row, error } = await (supabaseAdmin as any)
+    const { data: row, error } = await supabaseAdmin
       .from("library_entries")
       .select(PUBLIC_ARTICLE_COLUMNS)
       .eq("slug", data.slug)
@@ -51,10 +51,9 @@ export const getArticleBySlug = createServerFn({ method: "GET" })
     return { ...row, signed_url: signed?.signedUrl ?? "" } as ArticleRow;
   });
 
-
 export const listArticleSlugs = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await (supabaseAdmin as any)
+  const { data, error } = await supabaseAdmin
     .from("library_entries")
     .select("slug, added_at, publication_date")
     .order("added_at", { ascending: false });
@@ -68,7 +67,7 @@ export const listArticleSlugs = createServerFn({ method: "GET" }).handler(async 
 /** Public list of featured published articles for the home page. */
 export const listFeaturedArticles = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await (supabaseAdmin as any)
+  const { data, error } = await supabaseAdmin
     .from("library_entries")
     .select("id, slug, nyrj_id, title, authors, issue, topic, abstract, added_at, publication_date")
     .eq("featured", true)
@@ -98,12 +97,12 @@ export const incrementCitation = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data }): Promise<number> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: next, error } = await (supabaseAdmin as any).rpc("increment_citation_count", {
+    const { data: next, error } = await supabaseAdmin.rpc("increment_citation_count", {
       _id: data.id,
     });
     if (error) {
       console.error("[server] citation rpc error:", error);
-      return 0;
+      throw new Error("Could not record the citation.");
     }
-    return typeof next === "number" ? next : 0;
+    return next;
   });

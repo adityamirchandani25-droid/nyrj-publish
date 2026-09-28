@@ -14,9 +14,17 @@ export const Route = createFileRoute("/submit/apply")({
   head: () => ({
     meta: [
       { title: "Manuscript Submission Form — NYRJ" },
-      { name: "description", content: "Complete the three-step NYRJ manuscript submission form: upload files, sign declarations, and enter author details." },
+      {
+        name: "description",
+        content:
+          "Complete the three-step NYRJ manuscript submission form: upload files, sign declarations, and enter author details.",
+      },
       { property: "og:title", content: "NYRJ Manuscript Submission Form" },
-      { property: "og:description", content: "Three-step submission: files, declarations, and author details — delivered straight to the NYRJ editorial office." },
+      {
+        property: "og:description",
+        content:
+          "Three-step submission: files, declarations, and author details — delivered straight to the NYRJ editorial office.",
+      },
       { property: "og:url", content: "https://nyrj.org/submit/apply" },
       { name: "robots", content: "noindex,follow" },
     ],
@@ -143,7 +151,17 @@ function SubmitApply() {
       if (!researchDomain.trim()) return false;
       if (!referralCode.trim()) return false;
       const authorFields: (keyof Author)[] = [
-        "name","email","institution","orcid","phone","address","city","state","zip","nation","institutionAddress",
+        "name",
+        "email",
+        "institution",
+        "orcid",
+        "phone",
+        "address",
+        "city",
+        "state",
+        "zip",
+        "nation",
+        "institutionAddress",
       ];
       for (const a of authors) {
         for (const k of authorFields) if (!a[k].trim()) return false;
@@ -151,10 +169,31 @@ function SubmitApply() {
         if (!isValidPhone(a.phone)) return false;
       }
       return true;
-
     }
     return true;
-  }, [step, manuscriptFile, supplementaryFiles, conflictOfInterest, conflictExplanation, funding, fundingSource, usedGenAi, genAiExplanation, isOriginal, notUnderConsideration, hasHumanOrVertebrate, consentFormFiles, allAuthorsConsent, title, researchType, researchTypeOther, keywords, researchDomain, referralCode, authors]);
+  }, [
+    step,
+    manuscriptFile,
+    supplementaryFiles,
+    conflictOfInterest,
+    conflictExplanation,
+    funding,
+    fundingSource,
+    usedGenAi,
+    genAiExplanation,
+    isOriginal,
+    notUnderConsideration,
+    hasHumanOrVertebrate,
+    consentFormFiles,
+    allAuthorsConsent,
+    title,
+    researchType,
+    researchTypeOther,
+    keywords,
+    researchDomain,
+    referralCode,
+    authors,
+  ]);
 
   async function uploadFile(file: File, uid: string) {
     const safe = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120);
@@ -269,7 +308,9 @@ function SubmitApply() {
           </p>
           <div className="mt-6 flex gap-3">
             <Button onClick={() => navigate({ to: "/track" })}>View tracker</Button>
-            <Button variant="outline" onClick={() => navigate({ to: "/" })}>Home</Button>
+            <Button variant="outline" onClick={() => navigate({ to: "/" })}>
+              Home
+            </Button>
           </div>
         </section>
       </SiteLayout>
@@ -363,7 +404,8 @@ function SubmitApply() {
               <div>
                 <Label>Additional files (optional)</Label>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Add any additional files. Every file must include a short description of what it is.
+                  Add any additional files. Every file must include a short description of what it
+                  is.
                 </p>
                 <Input
                   key={supplementaryKey}
@@ -403,7 +445,9 @@ function SubmitApply() {
                           placeholder="What is this file?"
                           onChange={(e) =>
                             setSupplementaryFiles((prev) =>
-                              prev.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)),
+                              prev.map((x, j) =>
+                                j === i ? { ...x, description: e.target.value } : x,
+                              ),
                             )
                           }
                         />
@@ -529,7 +573,10 @@ function SubmitApply() {
               <div className="border border-border p-4 bg-card space-y-3">
                 <p className="text-sm">Data availability</p>
                 {[
-                  { v: "openly_available_online", l: "The data is openly available to the editors online." },
+                  {
+                    v: "openly_available_online",
+                    l: "The data is openly available to the editors online.",
+                  },
                   { v: "available_on_request", l: "The data is available to editors on request." },
                   { v: "not_available", l: "The data is not openly available." },
                 ].map((opt) => (
@@ -580,9 +627,13 @@ function SubmitApply() {
                 <select
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
                   value={researchType}
-                  onChange={(e) => setResearchType(e.target.value as (typeof RESEARCH_TYPES)[number])}
+                  onChange={(e) =>
+                    setResearchType(e.target.value as (typeof RESEARCH_TYPES)[number])
+                  }
                 >
-                  {RESEARCH_TYPES.map((t) => <option key={t}>{t}</option>)}
+                  {RESEARCH_TYPES.map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
                 </select>
                 {researchType === "Other" && (
                   <div className="mt-2">
@@ -636,8 +687,6 @@ function SubmitApply() {
                 </p>
               </div>
 
-
-
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <Label>Authors</Label>
@@ -655,7 +704,8 @@ function SubmitApply() {
                     <div key={idx} className="border border-border p-4 space-y-3 bg-card">
                       <div className="flex items-center justify-between">
                         <p className="text-xs uppercase tracking-widest text-muted-foreground">
-                          Author {idx + 1}{idx === 0 ? " (corresponding)" : ""}
+                          Author {idx + 1}
+                          {idx === 0 ? " (corresponding)" : ""}
                         </p>
                         {authors.length > 1 && (
                           <button
@@ -668,32 +718,85 @@ function SubmitApply() {
                         )}
                       </div>
                       <div className="grid sm:grid-cols-2 gap-3">
-                        <AuthorField label="Name *" value={a.name} onChange={(v) => updateAuthor(idx, "name", v)} />
-                        <AuthorField label="Email *" value={a.email} onChange={(v) => updateAuthor(idx, "email", v)} />
-                        <AuthorField label="Institution *" value={a.institution} onChange={(v) => updateAuthor(idx, "institution", v)} />
+                        <AuthorField
+                          label="Name *"
+                          value={a.name}
+                          onChange={(v) => updateAuthor(idx, "name", v)}
+                        />
+                        <AuthorField
+                          label="Email *"
+                          value={a.email}
+                          onChange={(v) => updateAuthor(idx, "email", v)}
+                        />
+                        <AuthorField
+                          label="Institution *"
+                          value={a.institution}
+                          onChange={(v) => updateAuthor(idx, "institution", v)}
+                        />
                         <div>
-                          <AuthorField label="ORCID *" value={a.orcid} onChange={(v) => updateAuthor(idx, "orcid", v)} />
-                          <p className={`mt-1 text-[11px] ${a.orcid.trim() && !isValidOrcid(a.orcid) ? "text-destructive" : "text-muted-foreground"}`}>
+                          <AuthorField
+                            label="ORCID *"
+                            value={a.orcid}
+                            onChange={(v) => updateAuthor(idx, "orcid", v)}
+                          />
+                          <p
+                            className={`mt-1 text-[11px] ${a.orcid.trim() && !isValidOrcid(a.orcid) ? "text-destructive" : "text-muted-foreground"}`}
+                          >
                             Required for every author — format 0000-0002-1825-0097.{" "}
-                            <a href="https://orcid.org/register" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+                            <a
+                              href="https://orcid.org/register"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline underline-offset-2"
+                            >
                               Get a free ORCID
                             </a>
                           </p>
                         </div>
 
                         <div>
-                          <AuthorField label="Phone (with country code) *" value={a.phone} onChange={(v) => updateAuthor(idx, "phone", v)} />
-                          <p className={`mt-1 text-[11px] ${a.phone.trim() && !isValidPhone(a.phone) ? "text-destructive" : "text-muted-foreground"}`}>
+                          <AuthorField
+                            label="Phone (with country code) *"
+                            value={a.phone}
+                            onChange={(v) => updateAuthor(idx, "phone", v)}
+                          />
+                          <p
+                            className={`mt-1 text-[11px] ${a.phone.trim() && !isValidPhone(a.phone) ? "text-destructive" : "text-muted-foreground"}`}
+                          >
                             Start with your country code — e.g. +1 404 555 0199.
                           </p>
                         </div>
 
-                        <AuthorField label="Address *" value={a.address} onChange={(v) => updateAuthor(idx, "address", v)} />
-                        <AuthorField label="City *" value={a.city} onChange={(v) => updateAuthor(idx, "city", v)} />
-                        <AuthorField label="State / Region *" value={a.state} onChange={(v) => updateAuthor(idx, "state", v)} />
-                        <AuthorField label="ZIP / Postal *" value={a.zip} onChange={(v) => updateAuthor(idx, "zip", v)} />
-                        <AuthorField label="Nation *" value={a.nation} onChange={(v) => updateAuthor(idx, "nation", v)} />
-                        <AuthorField label="Institution address *" value={a.institutionAddress} onChange={(v) => updateAuthor(idx, "institutionAddress", v)} />
+                        <AuthorField
+                          label="Address *"
+                          value={a.address}
+                          onChange={(v) => updateAuthor(idx, "address", v)}
+                        />
+                        <AuthorField
+                          label="City *"
+                          value={a.city}
+                          onChange={(v) => updateAuthor(idx, "city", v)}
+                        />
+                        <AuthorField
+                          label="State / Region *"
+                          value={a.state}
+                          onChange={(v) => updateAuthor(idx, "state", v)}
+                        />
+                        <AuthorField
+                          label="ZIP / Postal *"
+                          value={a.zip}
+                          onChange={(v) => updateAuthor(idx, "zip", v)}
+                        />
+                        <AuthorField
+                          label="Nation *"
+                          value={a.nation}
+                          onChange={(v) => updateAuthor(idx, "nation", v)}
+                        />
+                        <AuthorField
+                          label="Institution address *"
+                          value={a.institutionAddress}
+                          onChange={(v) => updateAuthor(idx, "institutionAddress", v)}
+                        />
                       </div>
                     </div>
                   ))}
@@ -713,9 +816,7 @@ function SubmitApply() {
           )}
         </div>
 
-        {error && (
-          <p className="mt-4 text-sm text-destructive">{error}</p>
-        )}
+        {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
 
         <div className="mt-8 flex justify-between">
           <Button

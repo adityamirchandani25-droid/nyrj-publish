@@ -8,6 +8,7 @@ export const EDITOR_RECIPIENTS = ["keyaanmerchant24@gmail.com", "Madhavarora529@
 
 const StaffSchema = z.object({ staffToken: z.string().min(1) });
 const ReviewerSchema = z.object({ reviewerToken: z.string().min(1) });
+const ReviewerInviteSchema = ReviewerSchema.extend({ token: z.string().min(10).max(200) });
 
 export type AssignmentRow = {
   id: string;
@@ -54,6 +55,30 @@ function fmtDate(iso: string) {
     day: "numeric",
     year: "numeric",
   });
+}
+
+async function requireApprovedReviewer(reviewerToken: string) {
+  const { verifyReviewerToken } = await import("./peer-review.server");
+  const reviewerId = verifyReviewerToken(reviewerToken);
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: reviewer, error } = await supabaseAdmin
+    .from("peer_reviewers")
+    .select("id, name, email, status")
+    .eq("id", reviewerId)
+    .maybeSingle();
+  if (error) throw new Error("Could not verify your reviewer account. Please sign in again.");
+  if (!reviewer || reviewer.status !== "approved") {
+    throw new Error("This reviewer account is not active.");
+  }
+  return { ...reviewer, email: reviewer.email.trim().toLowerCase() };
+}
+
+function requireAssignmentOwner(accountEmail: string, assignmentEmail: string) {
+  if (accountEmail !== assignmentEmail.trim().toLowerCase()) {
+    throw new Error(
+      "This invitation belongs to a different reviewer account. Sign in with the email address that received the invitation.",
+    );
+  }
 }
 
 /* ---------------------------------- staff --------------------------------- */
@@ -109,14 +134,12 @@ export const assignReviewer = createServerFn({ method: "POST" })
 
     const s = sub as { title: string; keywords: string; research_domain: string };
     const inviteUrl = `${SITE_URL}/review?token=${token}`;
+    let emailSent = false;
     try {
-      const { buildReviewerFiles } = await import("./peer-review.server");
-      const { attachments, files } = await buildReviewerFiles(data.submissionId);
       const { sendTemplateEmail } = await import("./email-templates/send-email");
       await sendTemplateEmail("reviewer-invitation", reviewerEmail, {
         idempotencyKey: `reviewer-invite-${token}`,
         replyTo: "NYRJINFO@gmail.com",
-        attachments,
         templateData: {
           reviewerName: data.reviewerName || "Reviewer",
           title: s.title,
@@ -124,15 +147,15 @@ export const assignReviewer = createServerFn({ method: "POST" })
           keywords: s.keywords,
           dueDate: fmtDate(dueAt),
           inviteUrl,
-          files,
         },
       });
       await audit(
         data.submissionId,
         data.assignedBy || "staff",
         "Invitation email sent",
-        `To ${data.reviewerEmail} · due ${fmtDate(dueAt)} · ${files.length} file(s)`,
+        `To ${data.reviewerEmail} · due ${fmtDate(dueAt)} · secure portal access required`,
       );
+      emailSent = true;
     } catch (e) {
       console.error("[server] reviewer invite email failed:", e);
       await audit(
@@ -142,16 +165,16 @@ export const assignReviewer = createServerFn({ method: "POST" })
         `To ${data.reviewerEmail}`,
       );
     }
-    return { ok: true, inviteUrl };
+    return { ok: true, inviteUrl, emailSent };
   });
 
-/** Re-sends the invitation (same link) with every manuscript file attached. */
-export const resendReviewerFiles = createServerFn({ method: "POST" })
+/** Re-sends the secure invitation link. Manuscript files remain behind reviewer login. */
+export const resendReviewerInvitation = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => StaffSchema.extend({ assignmentId: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const { verifyStaffToken } = await import("./staff-auth.server");
     verifyStaffToken(data.staffToken);
-    const { buildReviewerFiles, audit } = await import("./peer-review.server");
+    const { audit } = await import("./peer-review.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: a } = await supabaseAdmin
       .from("review_assignments")
@@ -172,13 +195,10 @@ export const resendReviewerFiles = createServerFn({ method: "POST" })
       .eq("id", r.submission_id)
       .single();
     const s = (sub ?? {}) as { title?: string; keywords?: string; research_domain?: string };
-    const { attachments, files } = await buildReviewerFiles(r.submission_id);
-    if (files.length === 0) throw new Error("This submission has no uploaded files.");
     const { sendTemplateEmail } = await import("./email-templates/send-email");
     await sendTemplateEmail("reviewer-invitation", r.reviewer_email, {
-      idempotencyKey: `reviewer-files-${data.assignmentId}-${Date.now()}`,
+      idempotencyKey: `reviewer-invite-resend-${data.assignmentId}-${Date.now()}`,
       replyTo: "NYRJINFO@gmail.com",
-      attachments,
       templateData: {
         reviewerName: r.reviewer_name || "Reviewer",
         title: s.title ?? "",
@@ -186,16 +206,15 @@ export const resendReviewerFiles = createServerFn({ method: "POST" })
         keywords: s.keywords ?? "",
         dueDate: fmtDate(r.due_at),
         inviteUrl: `${SITE_URL}/review?token=${r.invite_token}`,
-        files,
       },
     });
     await audit(
       r.submission_id,
       "staff",
-      "Manuscript files emailed to reviewer",
-      `To ${r.reviewer_email} · ${files.length} file(s)`,
+      "Secure reviewer invitation resent",
+      `To ${r.reviewer_email}`,
     );
-    return { ok: true, count: files.length };
+    return { ok: true };
   });
 
 export const listAssignments = createServerFn({ method: "POST" })
@@ -204,12 +223,6 @@ export const listAssignments = createServerFn({ method: "POST" })
     const { verifyStaffToken } = await import("./staff-auth.server");
     verifyStaffToken(data.staffToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    try {
-      const { runReviewReminders } = await import("./peer-review.server");
-      await runReviewReminders();
-    } catch (e) {
-      console.error("[server] reminder sweep failed:", e);
-    }
     const { data: rows, error } = await supabaseAdmin
       .from("review_assignments")
       .select(ASSIGNMENT_COLS)
@@ -335,6 +348,24 @@ export const registerReviewer = createServerFn({ method: "POST" })
       throw new Error("Could not create the account. Please try again.");
     }
     await audit(null, data.email.toLowerCase(), "Reviewer account requested", data.name);
+    try {
+      const { sendTemplateEmailToMany } = await import("./email-templates/send-email");
+      await sendTemplateEmailToMany("reviewer-account-request", EDITOR_RECIPIENTS, (to) => ({
+        idempotencyKey: `reviewer-account-request-${data.email.toLowerCase()}-${to}`,
+        replyTo: data.email.toLowerCase(),
+        templateData: {
+          reviewerName: data.name,
+          reviewerEmail: data.email.toLowerCase(),
+          username: data.username.toLowerCase(),
+          expertise: data.expertise,
+          adminUrl: `${SITE_URL}/admin/submissions`,
+        },
+      }));
+      await audit(null, "system", "Staff notified of reviewer request", data.email.toLowerCase());
+    } catch (emailError) {
+      console.error("[server] reviewer account request email failed:", emailError);
+      await audit(null, "system", "Reviewer request notification failed", data.email.toLowerCase());
+    }
     return { ok: true };
   });
 
@@ -409,6 +440,7 @@ export const setReviewerStatus = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
     const r = row as { name: string; email: string };
+    let emailSent = data.status === "pending";
     if (data.status !== "pending") {
       try {
         const { sendTemplateEmail } = await import("./email-templates/send-email");
@@ -417,6 +449,7 @@ export const setReviewerStatus = createServerFn({ method: "POST" })
           replyTo: "NYRJINFO@gmail.com",
           templateData: { reviewerName: r.name, approved: data.status === "approved" },
         });
+        emailSent = true;
       } catch (e) {
         console.error("[server] reviewer decision email failed:", e);
       }
@@ -427,7 +460,7 @@ export const setReviewerStatus = createServerFn({ method: "POST" })
       `Reviewer account ${data.status}`,
       `${r.name} (${r.email})`,
     );
-    return { ok: true };
+    return { ok: true, emailSent };
   });
 
 /* ----------------------- reviewer-facing operations ----------------------- */
@@ -446,22 +479,25 @@ export type InviteView = {
   manuscriptUrl: string | null;
 };
 
-async function loadInviteByToken(token: string): Promise<InviteView> {
+async function loadInviteByToken(token: string, reviewerToken: string): Promise<InviteView> {
+  const reviewer = await requireApprovedReviewer(reviewerToken);
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: a } = await supabaseAdmin
     .from("review_assignments")
-    .select("id, submission_id, reviewer_name, status, due_at, review_comments")
+    .select("id, submission_id, reviewer_email, reviewer_name, status, due_at, review_comments")
     .eq("invite_token", token)
     .maybeSingle();
   if (!a) throw new Error("This review link is not valid.");
   const row = a as {
     id: string;
     submission_id: string;
+    reviewer_email: string;
     reviewer_name: string;
     status: string;
     due_at: string;
     review_comments: string;
   };
+  requireAssignmentOwner(reviewer.email, row.reviewer_email);
   const { data: sub } = await supabaseAdmin
     .from("manuscript_submissions")
     .select("title, abstract, keywords, research_domain, manuscript_path, manuscript_filename")
@@ -497,30 +533,19 @@ async function loadInviteByToken(token: string): Promise<InviteView> {
 export const getReviewerWorkflow = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ReviewerSchema.parse(d))
   .handler(async ({ data }) => {
-    const { verifyReviewerToken } = await import("./peer-review.server");
-    const reviewerId = verifyReviewerToken(data.reviewerToken);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: reviewer } = await supabaseAdmin
-      .from("peer_reviewers")
-      .select("status")
-      .eq("id", reviewerId)
-      .maybeSingle();
-    if ((reviewer as { status?: string } | null)?.status !== "approved") {
-      throw new Error("This reviewer account is not active.");
-    }
+    await requireApprovedReviewer(data.reviewerToken);
     const { signedEditorialWorkflowUrl } = await import("./reviewer-resources.server");
     return { url: await signedEditorialWorkflowUrl() };
   });
 
 export const getInvite = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ token: z.string().min(10).max(200) }).parse(d))
-  .handler(async ({ data }) => loadInviteByToken(data.token));
+  .inputValidator((d: unknown) => ReviewerInviteSchema.parse(d))
+  .handler(async ({ data }) => loadInviteByToken(data.token, data.reviewerToken));
 
 export const respondToInvite = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) =>
-    z.object({ token: z.string().min(10).max(200), accept: z.boolean() }).parse(d),
-  )
+  .inputValidator((d: unknown) => ReviewerInviteSchema.extend({ accept: z.boolean() }).parse(d))
   .handler(async ({ data }) => {
+    const reviewer = await requireApprovedReviewer(data.reviewerToken);
     const { audit } = await import("./peer-review.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: a } = await supabaseAdmin
@@ -537,14 +562,20 @@ export const respondToInvite = createServerFn({ method: "POST" })
       status: string;
       due_at: string;
     };
+    requireAssignmentOwner(reviewer.email, row.reviewer_email);
     if (row.status !== "invited") throw new Error("You have already responded to this invitation.");
-    await supabaseAdmin
+    const { data: updated, error: updateError } = await supabaseAdmin
       .from("review_assignments")
       .update({
         status: data.accept ? "accepted" : "declined",
         responded_at: new Date().toISOString(),
       } as never)
-      .eq("id", row.id);
+      .eq("id", row.id)
+      .eq("status", "invited")
+      .select("id")
+      .maybeSingle();
+    if (updateError) throw new Error("Could not save your response. Please try again.");
+    if (!updated) throw new Error("You have already responded to this invitation.");
     await audit(
       row.submission_id,
       row.reviewer_email,
@@ -557,20 +588,18 @@ export const respondToInvite = createServerFn({ method: "POST" })
       .eq("id", row.submission_id)
       .single();
     try {
-      const { sendTemplateEmail } = await import("./email-templates/send-email");
-      for (const to of EDITOR_RECIPIENTS) {
-        await sendTemplateEmail("reviewer-response", to, {
-          idempotencyKey: `reviewer-response-${row.id}-${data.accept ? "a" : "d"}-${to}`,
-          replyTo: row.reviewer_email,
-          templateData: {
-            reviewerName: row.reviewer_name || row.reviewer_email,
-            reviewerEmail: row.reviewer_email,
-            title: (sub as { title?: string } | null)?.title ?? "",
-            accepted: data.accept,
-            dueDate: row.due_at ? fmtDate(row.due_at) : "",
-          },
-        });
-      }
+      const { sendTemplateEmailToMany } = await import("./email-templates/send-email");
+      await sendTemplateEmailToMany("reviewer-response", EDITOR_RECIPIENTS, (to) => ({
+        idempotencyKey: `reviewer-response-${row.id}-${data.accept ? "a" : "d"}-${to}`,
+        replyTo: row.reviewer_email,
+        templateData: {
+          reviewerName: row.reviewer_name || row.reviewer_email,
+          reviewerEmail: row.reviewer_email,
+          title: (sub as { title?: string } | null)?.title ?? "",
+          accepted: data.accept,
+          dueDate: row.due_at ? fmtDate(row.due_at) : "",
+        },
+      }));
       await audit(
         row.submission_id,
         "system",
@@ -585,14 +614,12 @@ export const respondToInvite = createServerFn({ method: "POST" })
 
 export const submitReview = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
-    z
-      .object({
-        token: z.string().min(10).max(200),
-        comments: z.string().trim().min(1, "Please enter your review.").max(20000),
-      })
-      .parse(d),
+    ReviewerInviteSchema.extend({
+      comments: z.string().trim().min(1, "Please enter your review.").max(20000),
+    }).parse(d),
   )
   .handler(async ({ data }) => {
+    const reviewer = await requireApprovedReviewer(data.reviewerToken);
     const { audit } = await import("./peer-review.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: a } = await supabaseAdmin
@@ -608,16 +635,23 @@ export const submitReview = createServerFn({ method: "POST" })
       reviewer_name: string;
       status: string;
     };
-    if (row.status === "declined") throw new Error("You declined this review invitation.");
+    requireAssignmentOwner(reviewer.email, row.reviewer_email);
+    if (!["accepted", "review_received"].includes(row.status)) {
+      throw new Error("Accept this review invitation before submitting your review.");
+    }
 
-    await supabaseAdmin
+    const { data: updated, error: updateError } = await supabaseAdmin
       .from("review_assignments")
       .update({
         status: "review_received",
         review_comments: data.comments,
         review_submitted_at: new Date().toISOString(),
       } as never)
-      .eq("id", row.id);
+      .eq("id", row.id)
+      .in("status", ["accepted", "review_received"])
+      .select("id")
+      .maybeSingle();
+    if (updateError || !updated) throw new Error("Could not save your review. Please try again.");
 
     const { data: sub } = await supabaseAdmin
       .from("manuscript_submissions")
@@ -627,20 +661,18 @@ export const submitReview = createServerFn({ method: "POST" })
 
     const stamp = Date.now();
     try {
-      const { sendTemplateEmail } = await import("./email-templates/send-email");
-      for (const to of EDITOR_RECIPIENTS) {
-        await sendTemplateEmail("review-received", to, {
-          idempotencyKey: `review-received-${row.id}-${stamp}-${to}`,
-          replyTo: row.reviewer_email,
-          templateData: {
-            reviewerName: row.reviewer_name || row.reviewer_email,
-            reviewerEmail: row.reviewer_email,
-            title: (sub as { title?: string } | null)?.title ?? "",
-            submissionId: row.submission_id,
-            comments: data.comments,
-          },
-        });
-      }
+      const { sendTemplateEmailToMany } = await import("./email-templates/send-email");
+      await sendTemplateEmailToMany("review-received", EDITOR_RECIPIENTS, (to) => ({
+        idempotencyKey: `review-received-${row.id}-${stamp}-${to}`,
+        replyTo: row.reviewer_email,
+        templateData: {
+          reviewerName: row.reviewer_name || row.reviewer_email,
+          reviewerEmail: row.reviewer_email,
+          title: (sub as { title?: string } | null)?.title ?? "",
+          submissionId: row.submission_id,
+          comments: data.comments,
+        },
+      }));
       await audit(row.submission_id, row.reviewer_email, "Review submitted", "Emailed to editors");
     } catch (e) {
       console.error("[server] review-received email failed:", e);
@@ -670,21 +702,12 @@ export type ReviewerAssignmentView = InviteView & { token: string; submissionId:
 export const listMyAssignments = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ReviewerSchema.parse(d))
   .handler(async ({ data }): Promise<ReviewerAssignmentView[]> => {
-    const { verifyReviewerToken } = await import("./peer-review.server");
-    const reviewerId = verifyReviewerToken(data.reviewerToken);
+    const reviewer = await requireApprovedReviewer(data.reviewerToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: me } = await supabaseAdmin
-      .from("peer_reviewers")
-      .select("email, status")
-      .eq("id", reviewerId)
-      .maybeSingle();
-    const r = me as { email: string; status: string } | null;
-    if (!r || r.status !== "approved") throw new Error("This reviewer account is not active.");
-
     const { data: rows } = await supabaseAdmin
       .from("review_assignments")
       .select("id, submission_id, invite_token, reviewer_name, status, due_at, review_comments")
-      .eq("reviewer_email", r.email.toLowerCase())
+      .eq("reviewer_email", reviewer.email)
       .order("assigned_at", { ascending: false })
       .limit(200);
 

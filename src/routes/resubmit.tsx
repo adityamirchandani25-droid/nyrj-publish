@@ -2,11 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  createRevisionUpload,
-  finalizeRevision,
-  getResubmitInfo,
-} from "@/lib/editors.functions";
+import { createRevisionUpload, finalizeRevision, getResubmitInfo } from "@/lib/editors.functions";
 
 export const Route = createFileRoute("/resubmit")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -68,9 +64,7 @@ function ResubmitPage() {
       });
       setDone(res.version);
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "We couldn't upload that file. Please try again.",
-      );
+      setError(e instanceof Error ? e.message : "We couldn't upload that file. Please try again.");
     } finally {
       setBusy(false);
     }

@@ -46,12 +46,15 @@ function parseVideoUrl(raw: string): { provider: "youtube" | "vimeo"; embed_id: 
 // ---------- Public list ----------
 export const guidanceVideosList = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await (supabaseAdmin as any)
+  const { data, error } = await supabaseAdmin
     .from("guidance_videos")
     .select("*")
     .order("position", { ascending: true })
     .order("created_at", { ascending: true });
-  if (error) { console.error("[server] supabase error:", error); throw new Error("An unexpected error occurred. Please try again."); }
+  if (error) {
+    console.error("[server] supabase error:", error);
+    throw new Error("An unexpected error occurred. Please try again.");
+  }
   return (data ?? []) as GuidanceVideo[];
 });
 
@@ -69,14 +72,14 @@ export const guidanceVideoCreate = createServerFn({ method: "POST" })
     verifyStaffToken(data.staffToken);
     const { provider, embed_id } = parseVideoUrl(data.url);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: maxRow } = await (supabaseAdmin as any)
+    const { data: maxRow } = await supabaseAdmin
       .from("guidance_videos")
       .select("position")
       .order("position", { ascending: false })
       .limit(1)
       .maybeSingle();
     const nextPos = ((maxRow?.position as number | undefined) ?? -1) + 1;
-    const { data: row, error } = await (supabaseAdmin as any)
+    const { data: row, error } = await supabaseAdmin
       .from("guidance_videos")
       .insert({
         title: data.title,
@@ -87,7 +90,10 @@ export const guidanceVideoCreate = createServerFn({ method: "POST" })
       })
       .select()
       .single();
-    if (error) { console.error("[server] supabase error:", error); throw new Error("An unexpected error occurred. Please try again."); }
+    if (error) {
+      console.error("[server] supabase error:", error);
+      throw new Error("An unexpected error occurred. Please try again.");
+    }
     return row as GuidanceVideo;
   });
 
@@ -100,10 +106,10 @@ export const guidanceVideoDelete = createServerFn({ method: "POST" })
     const { verifyStaffToken } = await import("./staff-auth.server");
     verifyStaffToken(data.staffToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await (supabaseAdmin as any)
-      .from("guidance_videos")
-      .delete()
-      .eq("id", data.id);
-    if (error) { console.error("[server] supabase error:", error); throw new Error("An unexpected error occurred. Please try again."); }
+    const { error } = await supabaseAdmin.from("guidance_videos").delete().eq("id", data.id);
+    if (error) {
+      console.error("[server] supabase error:", error);
+      throw new Error("An unexpected error occurred. Please try again.");
+    }
     return { ok: true as const };
   });

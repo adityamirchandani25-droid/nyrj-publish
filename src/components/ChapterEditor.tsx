@@ -54,6 +54,7 @@ export function ChapterEditor({ auth, getAuth }: { auth?: Auth; getAuth?: () => 
   }
   useEffect(() => {
     void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function edit(c: Chapter) {
@@ -139,25 +140,56 @@ export function ChapterEditor({ auth, getAuth }: { auth?: Auth; getAuth?: () => 
     <div>
       <form onSubmit={submit} className="mt-4 border border-border bg-card p-5 space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Chapter Number" type="number" required
-            value={form.chapter_number} onChange={(v) => setForm({ ...form, chapter_number: v })} />
-          <Field label="School Name" required
-            value={form.school_name} onChange={(v) => setForm({ ...form, school_name: v })} />
-          <Field label="Location (City, State/Country)" required
-            value={form.location} onChange={(v) => setForm({ ...form, location: v })} />
-          <Field label="Chapter Lead" required
-            value={form.chapter_lead} onChange={(v) => setForm({ ...form, chapter_lead: v })} />
-          <Field label="Chapter Lead Email" type="email" required
+          <Field
+            label="Chapter Number"
+            type="number"
+            required
+            value={form.chapter_number}
+            onChange={(v) => setForm({ ...form, chapter_number: v })}
+          />
+          <Field
+            label="School Name"
+            required
+            value={form.school_name}
+            onChange={(v) => setForm({ ...form, school_name: v })}
+          />
+          <Field
+            label="Location (City, State/Country)"
+            required
+            value={form.location}
+            onChange={(v) => setForm({ ...form, location: v })}
+          />
+          <Field
+            label="Chapter Lead"
+            required
+            value={form.chapter_lead}
+            onChange={(v) => setForm({ ...form, chapter_lead: v })}
+          />
+          <Field
+            label="Chapter Lead Email"
+            type="email"
+            required
             value={form.chapter_lead_email}
-            onChange={(v) => setForm({ ...form, chapter_lead_email: v })} />
-          <Field label="Second Chapter Lead (optional)"
-            value={form.chapter_lead_2} onChange={(v) => setForm({ ...form, chapter_lead_2: v })} />
-          <Field label="Second Chapter Lead Email (optional)" type="email"
+            onChange={(v) => setForm({ ...form, chapter_lead_email: v })}
+          />
+          <Field
+            label="Second Chapter Lead (optional)"
+            value={form.chapter_lead_2}
+            onChange={(v) => setForm({ ...form, chapter_lead_2: v })}
+          />
+          <Field
+            label="Second Chapter Lead Email (optional)"
+            type="email"
             value={form.chapter_lead_2_email}
-            onChange={(v) => setForm({ ...form, chapter_lead_2_email: v })} />
-          <Field label="New Students This Year" type="number" required
+            onChange={(v) => setForm({ ...form, chapter_lead_2_email: v })}
+          />
+          <Field
+            label="New Students This Year"
+            type="number"
+            required
             value={form.new_students_this_year}
-            onChange={(v) => setForm({ ...form, new_students_this_year: v })} />
+            onChange={(v) => setForm({ ...form, new_students_this_year: v })}
+          />
         </div>
 
         <div>
@@ -183,25 +215,40 @@ export function ChapterEditor({ auth, getAuth }: { auth?: Auth; getAuth?: () => 
             key={photoKey}
             type="file"
             accept="image/png,image/jpeg,image/webp,image/gif"
-            onChange={(e) => { setPhoto(e.target.files?.[0] ?? null); setRemovePhoto(false); }}
+            onChange={(e) => {
+              setPhoto(e.target.files?.[0] ?? null);
+              setRemovePhoto(false);
+            }}
             className="text-sm"
           />
           {photo && (
-            <button type="button" onClick={() => { setPhoto(null); setPhotoKey((k) => k + 1); }}
-              className="ml-3 text-xs text-muted-foreground hover:text-destructive underline">
+            <button
+              type="button"
+              onClick={() => {
+                setPhoto(null);
+                setPhotoKey((k) => k + 1);
+              }}
+              className="ml-3 text-xs text-muted-foreground hover:text-destructive underline"
+            >
               remove
             </button>
           )}
           {form.id && !photo && (
             <label className="ml-4 text-xs text-muted-foreground inline-flex items-center gap-2">
-              <input type="checkbox" checked={removePhoto} onChange={(e) => setRemovePhoto(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={removePhoto}
+                onChange={(e) => setRemovePhoto(e.target.checked)}
+              />
               Delete existing photo
             </label>
           )}
         </div>
 
         <div>
-          <label className="block text-[10px] uppercase tracking-[0.2em] text-accent mb-1">Additional Notes</label>
+          <label className="block text-[10px] uppercase tracking-[0.2em] text-accent mb-1">
+            Additional Notes
+          </label>
           <textarea
             value={form.notes}
             onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -212,13 +259,18 @@ export function ChapterEditor({ auth, getAuth }: { auth?: Auth; getAuth?: () => 
         </div>
 
         <div className="flex items-center gap-3">
-          <button disabled={busy}
-            className="px-5 py-2.5 bg-primary text-primary-foreground text-xs uppercase tracking-[0.2em] hover:bg-accent transition disabled:opacity-50">
+          <button
+            disabled={busy}
+            className="px-5 py-2.5 bg-primary text-primary-foreground text-xs uppercase tracking-[0.2em] hover:bg-accent transition disabled:opacity-50"
+          >
             {busy ? "Saving…" : form.id ? "Update Chapter" : "Register Chapter"}
           </button>
           {form.id && (
-            <button type="button" onClick={reset}
-              className="text-xs text-muted-foreground hover:text-accent underline underline-offset-4">
+            <button
+              type="button"
+              onClick={reset}
+              className="text-xs text-muted-foreground hover:text-accent underline underline-offset-4"
+            >
               Cancel edit
             </button>
           )}
@@ -232,11 +284,18 @@ export function ChapterEditor({ auth, getAuth }: { auth?: Auth; getAuth?: () => 
       ) : (
         <ul className="mt-3 space-y-3">
           {chapters.map((c) => (
-            <li key={c.id} className="border border-border bg-card p-4 flex items-start justify-between gap-4">
+            <li
+              key={c.id}
+              className="border border-border bg-card p-4 flex items-start justify-between gap-4"
+            >
               <div className="flex gap-3">
                 {c.lead_photo_url && (
-                  <img src={c.lead_photo_url} alt={`${c.chapter_lead ?? "Chapter lead"} portrait`}
-                    className="w-12 h-12 object-cover rounded-full border border-border" loading="lazy" />
+                  <img
+                    src={c.lead_photo_url}
+                    alt={`${c.chapter_lead ?? "Chapter lead"} portrait`}
+                    className="w-12 h-12 object-cover rounded-full border border-border"
+                    loading="lazy"
+                  />
                 )}
                 <div className="text-sm">
                   <p className="font-semibold">
@@ -249,17 +308,25 @@ export function ChapterEditor({ auth, getAuth }: { auth?: Auth; getAuth?: () => 
                       {c.chapter_lead_email && <> · {c.chapter_lead_email}</>}
                     </p>
                   )}
-                  <p className="text-muted-foreground">New students this year: {c.new_students_this_year}</p>
+                  <p className="text-muted-foreground">
+                    New students this year: {c.new_students_this_year}
+                  </p>
                   {c.notes && <p className="italic text-muted-foreground mt-1">{c.notes}</p>}
                 </div>
               </div>
               <div className="flex gap-2 shrink-0">
-                <button onClick={() => edit(c)} title="Edit"
-                  className="text-xs px-2 py-1 border border-border hover:border-accent hover:text-accent">
+                <button
+                  onClick={() => edit(c)}
+                  title="Edit"
+                  className="text-xs px-2 py-1 border border-border hover:border-accent hover:text-accent"
+                >
                   ✎
                 </button>
-                <button onClick={() => remove(c.id)} title="Delete"
-                  className="text-xs px-2 py-1 border border-border hover:border-destructive hover:text-destructive">
+                <button
+                  onClick={() => remove(c.id)}
+                  title="Delete"
+                  className="text-xs px-2 py-1 border border-border hover:border-destructive hover:text-destructive"
+                >
                   ✕
                 </button>
               </div>
@@ -272,11 +339,23 @@ export function ChapterEditor({ auth, getAuth }: { auth?: Auth; getAuth?: () => 
 }
 
 function Field({
-  label, value, onChange, type = "text", required,
-}: { label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean }) {
+  label,
+  value,
+  onChange,
+  type = "text",
+  required,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  required?: boolean;
+}) {
   return (
     <div>
-      <label className="block text-[10px] uppercase tracking-[0.2em] text-accent mb-1">{label}</label>
+      <label className="block text-[10px] uppercase tracking-[0.2em] text-accent mb-1">
+        {label}
+      </label>
       <input
         type={type}
         value={value}

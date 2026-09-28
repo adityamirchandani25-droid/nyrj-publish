@@ -16,10 +16,21 @@ export const Route = createFileRoute("/advisors")({
   head: () => ({
     meta: [
       { title: "Advisory Board — National Youth Research Journal" },
-      { name: "description", content: "Meet the academics and professionals on the NYRJ advisory board guiding editorial standards and mentoring student researchers." },
-      { name: "keywords", content: "research advisors, student research mentors, academic advisory board, faculty mentors for student research, research mentorship" },
+      {
+        name: "description",
+        content:
+          "Meet the academics and professionals on the NYRJ advisory board guiding editorial standards and mentoring student researchers.",
+      },
+      {
+        name: "keywords",
+        content:
+          "research advisors, student research mentors, academic advisory board, faculty mentors for student research, research mentorship",
+      },
       { property: "og:title", content: "Advisory Board — National Youth Research Journal" },
-      { property: "og:description", content: "Academics and professionals guiding NYRJ's editorial standards." },
+      {
+        property: "og:description",
+        content: "Academics and professionals guiding NYRJ's editorial standards.",
+      },
       { property: "og:url", content: "https://nyrj.org/advisors" },
     ],
     links: [{ rel: "canonical", href: "https://nyrj.org/advisors" }],
@@ -55,14 +66,14 @@ function Advisors() {
           Our Advisors
         </h1>
         <p className="mt-4 text-muted-foreground max-w-2xl">
-          The <em>National Youth Research Journal</em> is guided by a dedicated advisory board of educators, researchers, and professionals who help guide us through academic processes and give academic suggestions.&nbsp;
+          The <em>National Youth Research Journal</em> is guided by a dedicated advisory board of
+          educators, researchers, and professionals who help guide us through academic processes and
+          give academic suggestions.&nbsp;
         </p>
 
         <div className="mt-12">
           {error && <p className="text-xs text-destructive">{error}</p>}
-          {rows === null && !error && (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          )}
+          {rows === null && !error && <p className="text-sm text-muted-foreground">Loading…</p>}
           {rows && rows.length === 0 && (
             <p className="text-sm text-muted-foreground italic">
               Advisor profiles will appear here soon.
@@ -110,7 +121,13 @@ function Advisors() {
   );
 }
 
-function AdvisorManager({ rows, onChanged }: { rows: AdvisorRow[]; onChanged: () => void | Promise<void> }) {
+function AdvisorManager({
+  rows,
+  onChanged,
+}: {
+  rows: AdvisorRow[];
+  onChanged: () => void | Promise<void>;
+}) {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [affiliation, setAffiliation] = useState("");
@@ -135,7 +152,9 @@ function AdvisorManager({ rows, onChanged }: { rows: AdvisorRow[]; onChanged: ()
     }
   }
 
-  async function fileToBase64(file: File): Promise<{ base64: string; mime: string; fileName: string }> {
+  async function fileToBase64(
+    file: File,
+  ): Promise<{ base64: string; mime: string; fileName: string }> {
     // Resize/recompress to JPEG (max 800px) so payload stays small and mime is always supported.
     const dataUrl: string = await new Promise((resolve, reject) => {
       const r = new FileReader();
@@ -154,19 +173,28 @@ function AdvisorManager({ rows, onChanged }: { rows: AdvisorRow[]; onChanged: ()
     const w = Math.round(img.width * scale);
     const h = Math.round(img.height * scale);
     const canvas = document.createElement("canvas");
-    canvas.width = w; canvas.height = h;
+    canvas.width = w;
+    canvas.height = h;
     const ctx = canvas.getContext("2d")!;
     ctx.drawImage(img, 0, 0, w, h);
     const jpeg = canvas.toDataURL("image/jpeg", 0.85);
     const base64 = jpeg.slice(jpeg.indexOf(",") + 1);
-    return { base64, mime: "image/jpeg", fileName: (file.name.replace(/\.[^.]+$/, "") || "photo") + ".jpg" };
+    return {
+      base64,
+      mime: "image/jpeg",
+      fileName: (file.name.replace(/\.[^.]+$/, "") || "photo") + ".jpg",
+    };
   }
-
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim()) { setError("Name is required."); return; }
-    setBusy(true); setError(null); setDone(null);
+    if (!name.trim()) {
+      setError("Name is required.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setDone(null);
     try {
       let photoData: { photoBase64: string; photoMime: string; photoFileName: string } | undefined;
       if (photoFile) {
@@ -185,12 +213,19 @@ function AdvisorManager({ rows, onChanged }: { rows: AdvisorRow[]; onChanged: ()
         },
       });
       setDone(`Added "${row.name}" to the Advisory Board.`);
-      setName(""); setTitle(""); setAffiliation(""); setBio(""); setPosition("");
-      setPhotoFile(null); setPhotoPreview(null);
+      setName("");
+      setTitle("");
+      setAffiliation("");
+      setBio("");
+      setPosition("");
+      setPhotoFile(null);
+      setPhotoPreview(null);
       await onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add advisor.");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleDelete(row: AdvisorRow) {
@@ -207,7 +242,13 @@ function AdvisorManager({ rows, onChanged }: { rows: AdvisorRow[]; onChanged: ()
     try {
       const { base64, mime, fileName } = await fileToBase64(file);
       await advisorUpdatePhoto({
-        data: { staffToken: staffToken(), id: row.id, photoBase64: base64, photoMime: mime, photoFileName: fileName },
+        data: {
+          staffToken: staffToken(),
+          id: row.id,
+          photoBase64: base64,
+          photoMime: mime,
+          photoFileName: fileName,
+        },
       });
       await onChanged();
     } catch (err) {
@@ -229,8 +270,18 @@ function AdvisorManager({ rows, onChanged }: { rows: AdvisorRow[]; onChanged: ()
     <div className="mt-6 space-y-6 max-w-2xl">
       <form onSubmit={submit} className="border border-border bg-card p-6 space-y-4">
         <Field label="Full Name" value={name} onChange={setName} required />
-        <Field label="Title (optional)" value={title} onChange={setTitle} placeholder="e.g. Professor of Biology" />
-        <Field label="Affiliation (optional)" value={affiliation} onChange={setAffiliation} placeholder="e.g. Georgia Tech" />
+        <Field
+          label="Title (optional)"
+          value={title}
+          onChange={setTitle}
+          placeholder="e.g. Professor of Biology"
+        />
+        <Field
+          label="Affiliation (optional)"
+          value={affiliation}
+          onChange={setAffiliation}
+          placeholder="e.g. Georgia Tech"
+        />
         <div>
           <label className="block text-xs uppercase tracking-[0.2em] text-accent mb-1">
             Short Bio (optional)
@@ -242,19 +293,19 @@ function AdvisorManager({ rows, onChanged }: { rows: AdvisorRow[]; onChanged: ()
             className="w-full border border-border bg-background px-3 py-2 text-sm"
           />
         </div>
-        <Field label="Display Order (optional)" value={position} onChange={setPosition} placeholder="0 (smaller appears first)" />
+        <Field
+          label="Display Order (optional)"
+          value={position}
+          onChange={setPosition}
+          placeholder="0 (smaller appears first)"
+        />
         <div>
           <label className="block text-xs uppercase tracking-[0.2em] text-accent mb-1">
             Photo (optional) — upload OR paste image URL
           </label>
           <label className="inline-block px-4 py-2 bg-primary text-primary-foreground text-xs uppercase tracking-[0.2em] cursor-pointer hover:bg-accent">
             Choose File
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handlePhotoChange}
-              className="hidden"
-            />
+            <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
           </label>
           {photoFile && (
             <span className="ml-3 text-xs text-muted-foreground">{photoFile.name}</span>
@@ -264,7 +315,11 @@ function AdvisorManager({ rows, onChanged }: { rows: AdvisorRow[]; onChanged: ()
             placeholder="…or paste a direct image URL (https://…)"
             onChange={async (e) => {
               const url = e.target.value.trim();
-              if (!url) { setPhotoFile(null); setPhotoPreview(null); return; }
+              if (!url) {
+                setPhotoFile(null);
+                setPhotoPreview(null);
+                return;
+              }
               try {
                 const res = await fetch(url);
                 const blob = await res.blob();
@@ -307,7 +362,11 @@ function AdvisorManager({ rows, onChanged }: { rows: AdvisorRow[]; onChanged: ()
               <li key={r.id} className="flex flex-col gap-2">
                 <div className="flex items-center gap-3">
                   {r.photo_url ? (
-                    <img src={r.photo_url} alt="" className="w-10 h-10 rounded-full object-cover border border-border shrink-0" />
+                    <img
+                      src={r.photo_url}
+                      alt=""
+                      className="w-10 h-10 rounded-full object-cover border border-border shrink-0"
+                    />
                   ) : (
                     <div className="w-10 h-10 rounded-full bg-muted border border-border shrink-0" />
                   )}
@@ -318,8 +377,11 @@ function AdvisorManager({ rows, onChanged }: { rows: AdvisorRow[]; onChanged: ()
                   </span>
                   <EditToggle id={r.id} editingId={editingId} setEditingId={setEditingId} />
                   <PhotoActions row={r} onUpdate={handleUpdatePhoto} onRemove={handleRemovePhoto} />
-                  <button type="button" onClick={() => handleDelete(r)}
-                    className="px-2 py-1 border border-border text-destructive hover:bg-destructive hover:text-destructive-foreground transition">
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(r)}
+                    className="px-2 py-1 border border-border text-destructive hover:bg-destructive hover:text-destructive-foreground transition"
+                  >
                     ✕
                   </button>
                 </div>
@@ -327,7 +389,10 @@ function AdvisorManager({ rows, onChanged }: { rows: AdvisorRow[]; onChanged: ()
                   <EditAdvisorForm
                     row={r}
                     onCancel={() => setEditingId(null)}
-                    onSaved={async () => { setEditingId(null); await onChanged(); }}
+                    onSaved={async () => {
+                      setEditingId(null);
+                      await onChanged();
+                    }}
                   />
                 )}
               </li>
@@ -387,9 +452,17 @@ function PhotoActions({
 }
 
 function Field({
-  label, value, onChange, required, placeholder,
+  label,
+  value,
+  onChange,
+  required,
+  placeholder,
 }: {
-  label: string; value: string; onChange: (v: string) => void; required?: boolean; placeholder?: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  required?: boolean;
+  placeholder?: string;
 }) {
   return (
     <div>
@@ -407,8 +480,14 @@ function Field({
 }
 
 function EditToggle({
-  id, editingId, setEditingId,
-}: { id: string; editingId: string | null; setEditingId: (v: string | null) => void }) {
+  id,
+  editingId,
+  setEditingId,
+}: {
+  id: string;
+  editingId: string | null;
+  setEditingId: (v: string | null) => void;
+}) {
   const active = editingId === id;
   return (
     <button
@@ -425,8 +504,14 @@ function EditToggle({
 }
 
 function EditAdvisorForm({
-  row, onCancel, onSaved,
-}: { row: AdvisorRow; onCancel: () => void; onSaved: () => void | Promise<void> }) {
+  row,
+  onCancel,
+  onSaved,
+}: {
+  row: AdvisorRow;
+  onCancel: () => void;
+  onSaved: () => void | Promise<void>;
+}) {
   const [name, setName] = useState(row.name);
   const [title, setTitle] = useState(row.title ?? "");
   const [affiliation, setAffiliation] = useState(row.affiliation ?? "");
@@ -437,8 +522,12 @@ function EditAdvisorForm({
 
   async function save(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim()) { setErr("Name is required."); return; }
-    setBusy(true); setErr(null);
+    if (!name.trim()) {
+      setErr("Name is required.");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
     try {
       await advisorUpdateInfo({
         data: {
@@ -454,7 +543,9 @@ function EditAdvisorForm({
       await onSaved();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Update failed.");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -463,7 +554,9 @@ function EditAdvisorForm({
       <Field label="Title" value={title} onChange={setTitle} />
       <Field label="Affiliation" value={affiliation} onChange={setAffiliation} />
       <div>
-        <label className="block text-xs uppercase tracking-[0.2em] text-accent mb-1">Short Bio</label>
+        <label className="block text-xs uppercase tracking-[0.2em] text-accent mb-1">
+          Short Bio
+        </label>
         <textarea
           value={bio}
           onChange={(e) => setBio(e.target.value)}
@@ -474,12 +567,18 @@ function EditAdvisorForm({
       <Field label="Display Order" value={position} onChange={setPosition} />
       {err && <p className="text-xs text-destructive">{err}</p>}
       <div className="flex gap-2">
-        <button type="submit" disabled={busy}
-          className="px-4 py-2 bg-primary text-primary-foreground text-xs uppercase tracking-[0.2em] hover:bg-accent transition disabled:opacity-50">
+        <button
+          type="submit"
+          disabled={busy}
+          className="px-4 py-2 bg-primary text-primary-foreground text-xs uppercase tracking-[0.2em] hover:bg-accent transition disabled:opacity-50"
+        >
           {busy ? "Saving…" : "Save Changes"}
         </button>
-        <button type="button" onClick={onCancel}
-          className="px-4 py-2 border border-border text-xs uppercase tracking-[0.2em] hover:bg-muted transition">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 border border-border text-xs uppercase tracking-[0.2em] hover:bg-muted transition"
+        >
           Cancel
         </button>
       </div>

@@ -72,7 +72,6 @@ export type AdminManuscriptRow = {
   initial_reviewer_name: string;
   initial_reviewer_email: string;
   initial_reviewer_assigned_at: string | null;
-
 };
 
 type UpdatePatch = { status?: string; decision?: string };
@@ -91,7 +90,6 @@ type AdminManuscriptRowSerialized = Omit<
 const SELECT_COLS =
   "id, submitter_email, title, research_type, research_type_other, status, decision, created_at, updated_at, deleted_at, manuscript_filename, manuscript_path, authors, abstract, comments, conflict_of_interest, conflict_explanation, funding, funding_source, used_gen_ai, gen_ai_explanation, is_original, not_under_consideration, has_human_or_vertebrate, consent_form_paths, data_availability, all_authors_consent, supplementary_paths, keywords, research_domain, initial_reviewer_name, initial_reviewer_email, initial_reviewer_assigned_at";
 
-
 export const listManuscriptSubmissions = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => TokenSchema.parse(d))
   .handler(async ({ data }): Promise<AdminManuscriptRowSerialized[]> => {
@@ -102,8 +100,6 @@ export const listManuscriptSubmissions = createServerFn({ method: "POST" })
     // The initial-reviewer rotation runs on its own schedule (and on demand from
     // the staff button) — never inline on page load, so the dashboard stays fast
     // and two people opening it can't double-assign the same paper.
-
-
 
     const { data: rows, error } = await supabaseAdmin
       .from("manuscript_submissions")
@@ -131,7 +127,10 @@ export const listTrashedManuscriptSubmissions = createServerFn({ method: "POST" 
       .lt("deleted_at", cutoff);
     if (expired && expired.length > 0) {
       const paths: string[] = [];
-      for (const r of expired as Array<{ manuscript_path: string | null; supplementary_paths: Json }>) {
+      for (const r of expired as Array<{
+        manuscript_path: string | null;
+        supplementary_paths: Json;
+      }>) {
         if (r.manuscript_path) paths.push(r.manuscript_path);
         if (Array.isArray(r.supplementary_paths)) {
           for (const s of r.supplementary_paths as Array<{ path?: string }>) {
@@ -143,7 +142,10 @@ export const listTrashedManuscriptSubmissions = createServerFn({ method: "POST" 
       await supabaseAdmin
         .from("manuscript_submissions")
         .delete()
-        .in("id", (expired as Array<{ id: string }>).map((r) => r.id));
+        .in(
+          "id",
+          (expired as Array<{ id: string }>).map((r) => r.id),
+        );
     }
 
     const { data: rows, error } = await supabaseAdmin
@@ -211,7 +213,6 @@ export const updateManuscriptSubmission = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-
 export const trashManuscriptSubmission = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => IdSchema.parse(d))
   .handler(async ({ data }) => {
@@ -264,10 +265,7 @@ export const purgeManuscriptSubmission = createServerFn({ method: "POST" })
       }
     }
     if (paths.length > 0) await supabaseAdmin.storage.from("submissions").remove(paths);
-    const { error } = await supabaseAdmin
-      .from("manuscript_submissions")
-      .delete()
-      .eq("id", data.id);
+    const { error } = await supabaseAdmin.from("manuscript_submissions").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -317,13 +315,19 @@ export const addManuscriptToLibrary = createServerFn({ method: "POST" })
         topic: data.topic || null,
         doi: data.doi || null,
         orcids: data.orcids
-          ? data.orcids.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean)
+          ? data.orcids
+              .split(/[,\s]+/)
+              .map((s) => s.trim())
+              .filter(Boolean)
           : null,
         award_winner: data.awardWinner ?? false,
         award_label: data.awardLabel || null,
         abstract: data.abstract || null,
         keywords: data.keywords
-          ? data.keywords.split(",").map((s2) => s2.trim()).filter(Boolean)
+          ? data.keywords
+              .split(",")
+              .map((s2) => s2.trim())
+              .filter(Boolean)
           : null,
         publication_date: data.publicationDate || null,
         author_email: data.authorEmail || null,
@@ -341,16 +345,14 @@ export const addManuscriptToLibrary = createServerFn({ method: "POST" })
 /** True only when the path is one this journal actually stored for a submission. */
 async function isKnownSubmissionPath(path: string): Promise<boolean> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const admin = supabaseAdmin as any;
-
-  const { data: direct } = await admin
+  const { data: direct } = await supabaseAdmin
     .from("manuscript_submissions")
     .select("id")
     .eq("manuscript_path", path)
     .limit(1);
   if (direct && direct.length > 0) return true;
 
-  const { data: version } = await admin
+  const { data: version } = await supabaseAdmin
     .from("manuscript_versions")
     .select("id")
     .eq("manuscript_path", path)
@@ -358,12 +360,16 @@ async function isKnownSubmissionPath(path: string): Promise<boolean> {
   if (version && version.length > 0) return true;
 
   // Supplementary files and consent forms are stored as JSON arrays of refs.
-  const { data: rows } = await admin
+  const { data: rows } = await supabaseAdmin
     .from("manuscript_submissions")
     .select("supplementary_paths, consent_form_paths");
   for (const r of rows ?? []) {
-    const refs = [...(r.supplementary_paths ?? []), ...(r.consent_form_paths ?? [])];
-    if (refs.some((f: any) => f?.path === path)) return true;
+    const refs = [r.supplementary_paths, r.consent_form_paths].flatMap((v) =>
+      Array.isArray(v) ? v : [],
+    );
+    if (refs.some((f) => typeof f === "object" && f !== null && "path" in f && f.path === path)) {
+      return true;
+    }
   }
   return false;
 }

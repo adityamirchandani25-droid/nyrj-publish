@@ -19,9 +19,16 @@ export const Route = createFileRoute("/chapters")({
         content:
           "Explore official NYRJ chapters: student-led clubs advancing youth research at schools around the world.",
       },
-      { name: "keywords", content: "NYRJ chapters, student research clubs, high school research club, start a research chapter, school research programs" },
+      {
+        name: "keywords",
+        content:
+          "NYRJ chapters, student research clubs, high school research club, start a research chapter, school research programs",
+      },
       { property: "og:title", content: "NYRJ Chapters" },
-      { property: "og:description", content: "Student-led NYRJ chapters advancing youth research." },
+      {
+        property: "og:description",
+        content: "Student-led NYRJ chapters advancing youth research.",
+      },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://nyrj.org/chapters" },
       { name: "twitter:card", content: "summary" },
@@ -43,8 +50,8 @@ function ChaptersPage() {
         <p className="mt-4 text-muted-foreground max-w-2xl">
           NYRJ chapters are student-led clubs that bring the journal's mission — youth research,
           every discipline — into schools everywhere. Below is our current list of registered
-          chapters. NYRJ is a peer-reviewed, open-access journal, and every chapter is free to
-          start and free to join.
+          chapters. NYRJ is a peer-reviewed, open-access journal, and every chapter is free to start
+          and free to join.
         </p>
 
         <div className="mt-6 border border-border bg-card p-5 flex flex-wrap items-center gap-4">
@@ -137,9 +144,7 @@ function ChaptersPage() {
                       </span>
                       {c.new_students_this_year}
                     </p>
-                    {c.about && (
-                      <p className="text-muted-foreground line-clamp-2">{c.about}</p>
-                    )}
+                    {c.about && <p className="text-muted-foreground line-clamp-2">{c.about}</p>}
                   </div>
                   {c.slug && (
                     <Link

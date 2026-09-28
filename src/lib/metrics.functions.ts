@@ -12,7 +12,9 @@ export const getJournalStats = createServerFn({ method: "GET" }).handler(async (
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const [libRes, subRes] = await Promise.all([
-    supabaseAdmin.from("library_entries").select("authors, citation_count, publication_date, added_at"),
+    supabaseAdmin
+      .from("library_entries")
+      .select("authors, citation_count, publication_date, added_at"),
     supabaseAdmin
       .from("manuscript_submissions")
       .select("authors, status, decision, created_at, updated_at")
@@ -26,10 +28,7 @@ export const getJournalStats = createServerFn({ method: "GET" }).handler(async (
   const subs = subRes.data ?? [];
 
   const articles = entries.length;
-  const researchers = entries.reduce(
-    (n, e) => n + countAuthors(e.authors as string | null),
-    0,
-  );
+  const researchers = entries.reduce((n, e) => n + countAuthors(e.authors as string | null), 0);
 
   const countries = new Set<string>();
   for (const s of subs) {
@@ -111,15 +110,12 @@ export const getJournalStats = createServerFn({ method: "GET" }).handler(async (
     const d = e.publication_date ?? e.added_at;
     return d ? new Date(d).getUTCFullYear() : null;
   };
-  const citations = entries.reduce((n, e) => n + (Number((e as any).citation_count) || 0), 0);
+  const citations = entries.reduce((n, e) => n + (Number(e.citation_count) || 0), 0);
   const window2 = entries.filter((e) => {
-    const y = yearOf(e as any);
+    const y = yearOf(e);
     return y === year - 1 || y === year - 2;
   });
-  const windowCitations = window2.reduce(
-    (n, e) => n + (Number((e as any).citation_count) || 0),
-    0,
-  );
+  const windowCitations = window2.reduce((n, e) => n + (Number(e.citation_count) || 0), 0);
   const impactFactor = window2.length > 0 ? windowCitations / window2.length : null;
   const citationsPerArticle = articles > 0 ? citations / articles : null;
 
@@ -138,4 +134,3 @@ export const getJournalStats = createServerFn({ method: "GET" }).handler(async (
     citationsPerArticle,
   };
 });
-

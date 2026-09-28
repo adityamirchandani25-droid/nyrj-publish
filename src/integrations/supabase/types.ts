@@ -352,6 +352,9 @@ export type Database = {
           award_label: string | null;
           award_winner: boolean;
           citation_count: number;
+          citation_formats: Json | null;
+          citation_generated_at: string | null;
+          citation_source_hash: string | null;
           doi: string | null;
           featured: boolean;
           file_name: string;
@@ -377,6 +380,9 @@ export type Database = {
           award_label?: string | null;
           award_winner?: boolean;
           citation_count?: number;
+          citation_formats?: Json | null;
+          citation_generated_at?: string | null;
+          citation_source_hash?: string | null;
           doi?: string | null;
           featured?: boolean;
           file_name: string;
@@ -402,6 +408,9 @@ export type Database = {
           award_label?: string | null;
           award_winner?: boolean;
           citation_count?: number;
+          citation_formats?: Json | null;
+          citation_generated_at?: string | null;
+          citation_source_hash?: string | null;
           doi?: string | null;
           featured?: boolean;
           file_name?: string;
@@ -915,6 +924,14 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      consume_ai_chat_quota: {
+        Args: { p_identity_hash: string };
+        Returns: {
+          allowed: boolean;
+          remaining: number;
+          retry_after_seconds: number;
+        }[];
+      };
       increment_citation_count: { Args: { _id: string }; Returns: number };
       slugify: { Args: { _input: string }; Returns: string };
     };

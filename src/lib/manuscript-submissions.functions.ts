@@ -47,15 +47,14 @@ const AdditionalFileRefSchema = z.object({
 const SubmissionSchema = z.object({
   title: z.string().trim().min(3).max(500),
   abstract: z.string().trim().max(8000).optional().default(""),
-  researchType: z
-    .enum([
-      "Research Paper",
-      "Perspective",
-      "Review",
-      "Theoretical Model",
-      "Meta-analysis",
-      "Other",
-    ]),
+  researchType: z.enum([
+    "Research Paper",
+    "Perspective",
+    "Review",
+    "Theoretical Model",
+    "Meta-analysis",
+    "Other",
+  ]),
   researchTypeOther: z.string().trim().max(200).optional().default(""),
   keywords: z.string().trim().min(1, "Keywords are required").max(300),
   researchDomain: z.string().trim().min(1, "Research domain is required").max(200),
@@ -72,11 +71,7 @@ const SubmissionSchema = z.object({
   notUnderConsideration: z.boolean(),
   hasHumanOrVertebrate: z.boolean(),
   consentFormPaths: z.array(FileRefSchema).max(20).optional().default([]),
-  dataAvailability: z.enum([
-    "openly_available_online",
-    "available_on_request",
-    "not_available",
-  ]),
+  dataAvailability: z.enum(["openly_available_online", "available_on_request", "not_available"]),
   allAuthorsConsent: z.literal(true),
   manuscriptPath: z.string().trim().max(500).optional().default(""),
   manuscriptFilename: z.string().trim().max(255).optional().default(""),

@@ -85,15 +85,17 @@ function accessCodeMatches(candidate: string): boolean {
 }
 
 /**
- * Gate the reviewer signup screen before it calls Supabase Auth. The code is
- * checked only on the server; actual portal access still requires both a valid
- * Supabase session and an active matching row in initial_reviewers.
+ * Creates the reviewer auth account and sends its verification link through
+ * the journal's managed email pipeline. generateLink deliberately does not
+ * invoke Supabase's SMTP service, so setup mail gets the same retries, archive,
+ * and staff retry controls as every other transactional message.
  */
-export const validateInitialReviewerSignup = createServerFn({ method: "POST" })
+export const createInitialReviewerAccount = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
     z
       .object({
         email: z.string().trim().email().max(255),
+        password: z.string().min(8, "Use at least 8 characters.").max(200),
         accessCode: z.string().min(4).max(128),
       })
       .parse(d),
@@ -104,14 +106,138 @@ export const validateInitialReviewerSignup = createServerFn({ method: "POST" })
     }
     const email = data.email.toLowerCase();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: reviewer } = await supabaseAdmin
+    const { data: reviewerData, error: reviewerError } = await supabaseAdmin
       .from("initial_reviewers")
-      .select("name")
+      .select("id, name, email, auth_user_id")
       .ilike("email", email)
       .eq("active", true)
       .maybeSingle();
+    if (reviewerError) {
+      console.error("[initial-reviewer] account lookup failed:", reviewerError);
+      throw new Error("We could not start account setup. Please try again.");
+    }
+    const reviewer = reviewerData as {
+      id: string;
+      name: string;
+      email: string;
+      auth_user_id: string | null;
+    } | null;
     if (!reviewer) throw new Error("The access code or invited email is not valid.");
-    return { ok: true as const, name: (reviewer as { name: string }).name };
+
+    const siteUrl = (process.env.PUBLIC_SITE_URL || "https://nyrj.org").replace(/\/+$/, "");
+    const redirectTo = `${siteUrl}/initial-reviewer`;
+    const setupFailed = "We could not start account setup. Please try again or contact NYRJ staff.";
+    const { admin } = supabaseAdmin.auth;
+
+    // New reviewers get a signup link. Linked reviewers, and reviewers left
+    // over from the old client-side signup (in Auth but never linked to their
+    // rotation row), get a magic link instead of being stranded.
+    let passwordSet = false;
+    let link = reviewer.auth_user_id
+      ? null
+      : await admin.generateLink({
+          type: "signup",
+          email,
+          password: data.password,
+          options: {
+            redirectTo,
+            data: { full_name: reviewer.name, requested_role: "initial_reviewer" },
+          },
+        });
+    if (link?.data.user && link.data.properties?.action_link) {
+      passwordSet = true;
+    } else {
+      link = await admin.generateLink({ type: "magiclink", email, options: { redirectTo } });
+    }
+
+    const user = link.data.user;
+    let actionLink = link.data.properties?.action_link;
+    if (link.error || !user || !actionLink) {
+      console.error("[initial-reviewer] account link generation failed:", link.error);
+      throw new Error(setupFailed);
+    }
+    if (reviewer.auth_user_id && reviewer.auth_user_id !== user.id) {
+      throw new Error("This reviewer email is already linked to another account.");
+    }
+
+    const existingAccount = Boolean(user.email_confirmed_at);
+    // Replacing the password before ownership is confirmed is safe: the
+    // account cannot sign in until the emailed link is opened.
+    if (!existingAccount && !passwordSet) {
+      const { error: passwordError } = await admin.updateUserById(user.id, {
+        password: data.password,
+      });
+      if (passwordError) {
+        console.error("[initial-reviewer] password update failed:", passwordError);
+        throw new Error(setupFailed);
+      }
+    }
+
+    // A confirmed account may already be used elsewhere on NYRJ. Never replace
+    // its password based only on the shared reviewer code. Email a recovery
+    // link so ownership is proven before the reviewer chooses a new password.
+    if (existingAccount) {
+      const recovery = await admin.generateLink({
+        type: "recovery",
+        email,
+        options: { redirectTo: `${siteUrl}/reset-password?next=initial-reviewer` },
+      });
+      const recoveryUser = recovery.data.user;
+      const recoveryLink = recovery.data.properties?.action_link;
+      if (recovery.error || !recoveryUser || !recoveryLink || recoveryUser.id !== user.id) {
+        console.error("[initial-reviewer] password setup link failed:", recovery.error);
+        throw new Error(setupFailed);
+      }
+      actionLink = recoveryLink;
+    }
+
+    if (!reviewer.auth_user_id) {
+      const { data: bound, error: bindError } = await supabaseAdmin
+        .from("initial_reviewers")
+        .update({ auth_user_id: user.id } as never)
+        .eq("id", reviewer.id)
+        .is("auth_user_id", null)
+        .select("auth_user_id")
+        .maybeSingle();
+      if (bindError) {
+        console.error("[initial-reviewer] account link failed:", bindError);
+        throw new Error(setupFailed);
+      }
+      // Lost a race with a concurrent setup: accept only if it bound this user.
+      if (!bound) {
+        const { data: current } = await supabaseAdmin
+          .from("initial_reviewers")
+          .select("auth_user_id")
+          .eq("id", reviewer.id)
+          .maybeSingle();
+        if ((current as { auth_user_id?: string } | null)?.auth_user_id !== user.id) {
+          throw new Error("This reviewer email is already linked to another account.");
+        }
+      }
+    }
+
+    try {
+      const { sendTemplateEmail } = await import("./email-templates/send-email");
+      await sendTemplateEmail("initial-reviewer-account", email, {
+        idempotencyKey: `initial-reviewer-account-${reviewer.id}-${Date.now()}`,
+        replyTo: "NYRJINFO@gmail.com",
+        templateData: {
+          reviewerName: reviewer.name,
+          actionUrl: actionLink,
+          existingAccount,
+        },
+      });
+    } catch (emailError) {
+      console.error("[initial-reviewer] account email failed:", emailError);
+      throw new Error(
+        "Your account was prepared, but we could not send the setup email. Please try again; staff can also retry it from the email archive.",
+      );
+    }
+
+    return {
+      ok: true as const,
+      delivery: existingAccount ? ("password_setup" as const) : ("confirmation" as const),
+    };
   });
 
 export const getInitialReviewerDesk = createServerFn({ method: "GET" })
@@ -260,22 +386,21 @@ export const submitInitialReview = createServerFn({ method: "POST" })
     if (error) throw new Error("Could not submit your review. Please try again.");
 
     try {
-      const { sendTemplateEmail } = await import("./email-templates/send-email");
+      const { sendTemplateEmailToMany } = await import("./email-templates/send-email");
       const dashboardUrl = `${process.env.PUBLIC_SITE_URL || "https://nyrj.org"}/admin/submissions`;
-      for (const to of STAFF_RECIPIENTS) {
-        await sendTemplateEmail("editor-recommendation", to, {
-          idempotencyKey: `initial-review-${data.submissionId}-${reviewer.id}-${Date.now()}-${to}`,
-          replyTo: reviewer.email,
-          templateData: {
-            editorName: reviewer.name,
-            editorEmail: reviewer.email,
-            title: row.title,
-            action: data.action,
-            comments: data.comments,
-            dashboardUrl,
-          },
-        });
-      }
+      const stamp = Date.now();
+      await sendTemplateEmailToMany("editor-recommendation", STAFF_RECIPIENTS, (to) => ({
+        idempotencyKey: `initial-review-${data.submissionId}-${reviewer.id}-${stamp}-${to}`,
+        replyTo: reviewer.email,
+        templateData: {
+          editorName: reviewer.name,
+          editorEmail: reviewer.email,
+          title: row.title,
+          action: data.action,
+          comments: data.comments,
+          dashboardUrl,
+        },
+      }));
     } catch (emailError) {
       console.error("[initial-reviewer] staff notification failed:", emailError);
     }

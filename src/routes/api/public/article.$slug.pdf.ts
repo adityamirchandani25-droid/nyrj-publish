@@ -10,7 +10,7 @@ export const Route = createFileRoute("/api/public/article/$slug/pdf")({
     handlers: {
       GET: async ({ params }) => {
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { data: row } = await (supabaseAdmin as any)
+        const { data: row } = await supabaseAdmin
           .from("library_entries")
           .select("file_path, file_name")
           .eq("slug", params.slug)
@@ -22,7 +22,7 @@ export const Route = createFileRoute("/api/public/article/$slug/pdf")({
           .download(row.file_path);
         if (error || !file) return new Response("Not found", { status: 404 });
 
-        const name = String(row.file_name ?? `${params.slug}.pdf`).replace(/[^\w.\-]+/g, "_");
+        const name = String(row.file_name ?? `${params.slug}.pdf`).replace(/[^\w.-]+/g, "_");
         const buffer = await file.arrayBuffer();
 
         return new Response(buffer, {

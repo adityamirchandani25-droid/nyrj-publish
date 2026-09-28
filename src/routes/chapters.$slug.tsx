@@ -20,7 +20,8 @@ export const Route = createFileRoute("/chapters/$slug")({
     const name = loaderData
       ? `Chapter ${loaderData.chapter_number} — ${loaderData.school_name}`
       : "NYRJ Chapter";
-    const desc = (loaderData?.about ?? "").slice(0, 155) ||
+    const desc =
+      (loaderData?.about ?? "").slice(0, 155) ||
       "An official NYRJ chapter: a student-led research club advancing youth research.";
     const url = `https://nyrj.org/chapters/${params.slug}`;
     return {
@@ -32,9 +33,7 @@ export const Route = createFileRoute("/chapters/$slug")({
         { property: "og:type", content: "article" },
         { property: "og:url", content: url },
         { name: "twitter:card", content: "summary" },
-        ...(loaderData?.location
-          ? [{ name: "geo.placename", content: loaderData.location }]
-          : []),
+        ...(loaderData?.location ? [{ name: "geo.placename", content: loaderData.location }] : []),
       ],
       links: [{ rel: "canonical", href: url }],
       scripts: loaderData
@@ -71,7 +70,12 @@ export const Route = createFileRoute("/chapters/$slug")({
                 "@context": "https://schema.org",
                 "@type": "BreadcrumbList",
                 itemListElement: [
-                  { "@type": "ListItem", position: 1, name: "Chapters", item: "https://nyrj.org/chapters" },
+                  {
+                    "@type": "ListItem",
+                    position: 1,
+                    name: "Chapters",
+                    item: "https://nyrj.org/chapters",
+                  },
                   { "@type": "ListItem", position: 2, name, item: url },
                 ],
               }),
@@ -109,7 +113,10 @@ function ChapterDetailPage() {
   return (
     <SiteLayout>
       <article className="mx-auto max-w-3xl px-6 py-16">
-        <Link to="/chapters" className="text-xs uppercase tracking-[0.2em] text-accent hover:underline">
+        <Link
+          to="/chapters"
+          className="text-xs uppercase tracking-[0.2em] text-accent hover:underline"
+        >
           ← All chapters
         </Link>
         <p className="mt-6 text-[10px] uppercase tracking-[0.35em] text-accent">
@@ -118,9 +125,7 @@ function ChapterDetailPage() {
         <h1 className="font-serif text-4xl sm:text-5xl text-primary mt-3 leading-tight">
           {chapter.school_name}
         </h1>
-        {chapter.location && (
-          <p className="mt-2 text-muted-foreground">{chapter.location}</p>
-        )}
+        {chapter.location && <p className="mt-2 text-muted-foreground">{chapter.location}</p>}
 
         <div className="mt-10 border border-border bg-card p-6 flex flex-wrap gap-6 items-start">
           {chapter.lead_photo_url && (
@@ -160,7 +165,9 @@ function ChapterDetailPage() {
             )}
             <p className="mt-4 text-sm text-muted-foreground">
               New students this year:{" "}
-              <span className="text-foreground font-semibold">{chapter.new_students_this_year}</span>
+              <span className="text-foreground font-semibold">
+                {chapter.new_students_this_year}
+              </span>
             </p>
             {chapter.chapter_lead_email && (
               <a

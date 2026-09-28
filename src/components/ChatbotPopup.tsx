@@ -40,7 +40,7 @@ export function ChatbotPopup() {
     try {
       const payload = next
         .filter((m) => m !== INTRO)
-        .slice(-12)
+        .slice(-8)
         .map((m) => ({ role: m.role, content: m.content }));
       const { reply } = await chatAssistant({ data: { messages: payload } });
       setMessages((cur) => [...cur, { role: "assistant", content: reply }]);
@@ -69,11 +69,7 @@ export function ChatbotPopup() {
           aria-hidden
           className="animate-nyrj-glow pointer-events-none absolute inset-0 -z-10 rounded-full bg-accent/40 blur-xl"
         />
-        {open ? (
-          <X size={20} />
-        ) : (
-          <Sparkles size={20} className="animate-nyrj-float" />
-        )}
+        {open ? <X size={20} /> : <Sparkles size={20} className="animate-nyrj-float" />}
         <span className="text-xs font-semibold uppercase tracking-[0.2em]">
           {open ? "Close" : "Ask Sage"}
         </span>
@@ -152,7 +148,7 @@ export function ChatbotPopup() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask Sage anything…"
-              maxLength={1000}
+              maxLength={800}
               className="flex-1 rounded-full border border-border bg-background px-4 py-2 text-sm focus:border-accent focus:outline-none"
             />
             <button

@@ -31,7 +31,7 @@ async function signLogo(path: string | null): Promise<string | null> {
 
 export const sponsorsList = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await (supabaseAdmin as any)
+  const { data, error } = await supabaseAdmin
     .from("sponsors")
     .select("id,name,tier,website,blurb,logo_path,position")
     .order("position", { ascending: true })
@@ -87,7 +87,7 @@ export const sponsorCreate = createServerFn({ method: "POST" })
       }
     }
 
-    const { data: row, error } = await (supabaseAdmin as any)
+    const { data: row, error } = await supabaseAdmin
       .from("sponsors")
       .insert({
         name: data.name,
@@ -114,7 +114,7 @@ export const sponsorDelete = createServerFn({ method: "POST" })
     const { verifyStaffToken } = await import("./staff-auth.server");
     verifyStaffToken(data.staffToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: existing } = await (supabaseAdmin as any)
+    const { data: existing } = await supabaseAdmin
       .from("sponsors")
       .select("logo_path")
       .eq("id", data.id)
@@ -122,7 +122,7 @@ export const sponsorDelete = createServerFn({ method: "POST" })
     if (existing?.logo_path) {
       await supabaseAdmin.storage.from("sponsor-logos").remove([existing.logo_path]);
     }
-    const { error } = await (supabaseAdmin as any).from("sponsors").delete().eq("id", data.id);
+    const { error } = await supabaseAdmin.from("sponsors").delete().eq("id", data.id);
     if (error) {
       console.error("[server] supabase error:", error);
       throw new Error("An unexpected error occurred. Please try again.");

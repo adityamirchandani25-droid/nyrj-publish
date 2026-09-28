@@ -34,18 +34,21 @@ async function signPhoto(path: string | null): Promise<string | null> {
 
 export const advisorsList = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await (supabaseAdmin as any)
+  const { data, error } = await supabaseAdmin
     .from("advisors")
     .select("*")
     .order("position", { ascending: true })
     .order("created_at", { ascending: true });
-  if (error) { console.error("[server] supabase error:", error); throw new Error("An unexpected error occurred. Please try again."); }
-  const rows = (data ?? []) as Array<AdvisorRow & { photo_path?: string | null }>;
-  const out: AdvisorRow[] = [];
-  for (const r of rows) {
-    out.push({ ...r, photo_url: await signPhoto((r as any).photo_url ?? null) });
+  if (error) {
+    console.error("[server] supabase error:", error);
+    throw new Error("An unexpected error occurred. Please try again.");
   }
-  return out;
+  return Promise.all(
+    (data ?? []).map(async (r): Promise<AdvisorRow> => ({
+      ...r,
+      photo_url: await signPhoto(r.photo_url),
+    })),
+  );
 });
 
 const CreateSchema = z.object({
@@ -78,10 +81,13 @@ export const advisorCreate = createServerFn({ method: "POST" })
       const { error: upErr } = await supabaseAdmin.storage
         .from("advisor-photos")
         .upload(photoPath, bytes, { contentType: data.photoMime, upsert: false });
-      if (upErr) { console.error("[server] storage upload error:", upErr); throw new Error("Could not upload the photo. Please try again."); }
+      if (upErr) {
+        console.error("[server] storage upload error:", upErr);
+        throw new Error("Could not upload the photo. Please try again.");
+      }
     }
 
-    const { data: row, error } = await (supabaseAdmin as any)
+    const { data: row, error } = await supabaseAdmin
       .from("advisors")
       .insert({
         name: data.name,
@@ -93,7 +99,10 @@ export const advisorCreate = createServerFn({ method: "POST" })
       })
       .select()
       .single();
-    if (error) { console.error("[server] supabase error:", error); throw new Error("An unexpected error occurred. Please try again."); }
+    if (error) {
+      console.error("[server] supabase error:", error);
+      throw new Error("An unexpected error occurred. Please try again.");
+    }
     return { ...row, photo_url: await signPhoto(photoPath) } as AdvisorRow;
   });
 
@@ -105,7 +114,7 @@ export const advisorDelete = createServerFn({ method: "POST" })
     const { verifyStaffToken } = await import("./staff-auth.server");
     verifyStaffToken(data.staffToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: existing } = await (supabaseAdmin as any)
+    const { data: existing } = await supabaseAdmin
       .from("advisors")
       .select("photo_url")
       .eq("id", data.id)
@@ -113,8 +122,11 @@ export const advisorDelete = createServerFn({ method: "POST" })
     if (existing?.photo_url) {
       await supabaseAdmin.storage.from("advisor-photos").remove([existing.photo_url]);
     }
-    const { error } = await (supabaseAdmin as any).from("advisors").delete().eq("id", data.id);
-    if (error) { console.error("[server] supabase error:", error); throw new Error("An unexpected error occurred. Please try again."); }
+    const { error } = await supabaseAdmin.from("advisors").delete().eq("id", data.id);
+    if (error) {
+      console.error("[server] supabase error:", error);
+      throw new Error("An unexpected error occurred. Please try again.");
+    }
     return { ok: true as const };
   });
 
@@ -135,7 +147,7 @@ export const advisorUpdateInfo = createServerFn({ method: "POST" })
     const { verifyStaffToken } = await import("./staff-auth.server");
     verifyStaffToken(data.staffToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row, error } = await (supabaseAdmin as any)
+    const { data: row, error } = await supabaseAdmin
       .from("advisors")
       .update({
         name: data.name,
@@ -147,8 +159,11 @@ export const advisorUpdateInfo = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .select()
       .single();
-    if (error) { console.error("[server] supabase error:", error); throw new Error("An unexpected error occurred. Please try again."); }
-    return { ...row, photo_url: await signPhoto((row as any).photo_url ?? null) } as AdvisorRow;
+    if (error) {
+      console.error("[server] supabase error:", error);
+      throw new Error("An unexpected error occurred. Please try again.");
+    }
+    return { ...row, photo_url: await signPhoto(row.photo_url) } as AdvisorRow;
   });
 
 // Update photo for an existing advisor
@@ -172,7 +187,7 @@ export const advisorUpdatePhoto = createServerFn({ method: "POST" })
     }
 
     // Remove old photo if exists
-    const { data: existing } = await (supabaseAdmin as any)
+    const { data: existing } = await supabaseAdmin
       .from("advisors")
       .select("photo_url")
       .eq("id", data.id)
@@ -187,15 +202,21 @@ export const advisorUpdatePhoto = createServerFn({ method: "POST" })
     const { error: upErr } = await supabaseAdmin.storage
       .from("advisor-photos")
       .upload(photoPath, bytes, { contentType: data.photoMime, upsert: false });
-    if (upErr) { console.error("[server] storage upload error:", upErr); throw new Error("Could not upload the photo. Please try again."); }
+    if (upErr) {
+      console.error("[server] storage upload error:", upErr);
+      throw new Error("Could not upload the photo. Please try again.");
+    }
 
-    const { data: row, error } = await (supabaseAdmin as any)
+    const { data: row, error } = await supabaseAdmin
       .from("advisors")
       .update({ photo_url: photoPath })
       .eq("id", data.id)
       .select()
       .single();
-    if (error) { console.error("[server] supabase error:", error); throw new Error("An unexpected error occurred. Please try again."); }
+    if (error) {
+      console.error("[server] supabase error:", error);
+      throw new Error("An unexpected error occurred. Please try again.");
+    }
     return { ...row, photo_url: await signPhoto(photoPath) } as AdvisorRow;
   });
 
@@ -212,7 +233,7 @@ export const advisorRemovePhoto = createServerFn({ method: "POST" })
     verifyStaffToken(data.staffToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { data: existing } = await (supabaseAdmin as any)
+    const { data: existing } = await supabaseAdmin
       .from("advisors")
       .select("photo_url")
       .eq("id", data.id)
@@ -221,12 +242,15 @@ export const advisorRemovePhoto = createServerFn({ method: "POST" })
       await supabaseAdmin.storage.from("advisor-photos").remove([existing.photo_url]);
     }
 
-    const { data: row, error } = await (supabaseAdmin as any)
+    const { data: row, error } = await supabaseAdmin
       .from("advisors")
       .update({ photo_url: null })
       .eq("id", data.id)
       .select()
       .single();
-    if (error) { console.error("[server] supabase error:", error); throw new Error("An unexpected error occurred. Please try again."); }
+    if (error) {
+      console.error("[server] supabase error:", error);
+      throw new Error("An unexpected error occurred. Please try again.");
+    }
     return { ...row, photo_url: null } as AdvisorRow;
   });

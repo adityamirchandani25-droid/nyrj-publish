@@ -12,7 +12,11 @@ export const Route = createFileRoute("/search")({
     meta: [
       { title: "Search — NYRJ" },
       { name: "description", content: "Search articles, advisors, events, and team across NYRJ." },
-      { name: "keywords", content: "search student research, find research papers by students, student journal search, research paper database students" },
+      {
+        name: "keywords",
+        content:
+          "search student research, find research papers by students, student journal search, research paper database students",
+      },
       { name: "robots", content: "noindex, follow" },
     ],
   }),

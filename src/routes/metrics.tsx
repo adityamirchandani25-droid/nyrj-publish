@@ -19,15 +19,19 @@ export const Route = createFileRoute("/metrics")({
         content:
           "NYRJ journal metrics: published articles, researchers featured, countries represented, and editorial turnaround times.",
       },
-      { name: "keywords", content: "journal metrics, student research statistics, peer review turnaround time, acceptance rate student journal, open access journal metrics" },
+      {
+        name: "keywords",
+        content:
+          "journal metrics, student research statistics, peer review turnaround time, acceptance rate student journal, open access journal metrics",
+      },
       { property: "og:title", content: "Journal Metrics — NYRJ" },
-       {
-         property: "og:description",
-         content: "Current reach, citation impact, and editorial turnaround metrics for NYRJ.",
-       },
-       { property: "og:type", content: "website" },
+      {
+        property: "og:description",
+        content: "Current reach, citation impact, and editorial turnaround metrics for NYRJ.",
+      },
+      { property: "og:type", content: "website" },
       { property: "og:url", content: "https://nyrj.org/metrics" },
-       { name: "twitter:card", content: "summary" },
+      { name: "twitter:card", content: "summary" },
     ],
     links: [{ rel: "canonical", href: "https://nyrj.org/metrics" }],
   }),
@@ -53,7 +57,8 @@ function MetricsPage() {
     {
       value: num(stats.researchers),
       label: "Researchers featured",
-      detail: "Named authors across every published paper — students whose work is now on the record.",
+      detail:
+        "Named authors across every published paper — students whose work is now on the record.",
     },
     {
       value: num(stats.studentsImpacted),
@@ -64,7 +69,8 @@ function MetricsPage() {
     {
       value: num(stats.countries),
       label: "Countries represented",
-      detail: "Distinct nations submitting authors have listed on their manuscripts. Updates automatically as new submissions come in.",
+      detail:
+        "Distinct nations submitting authors have listed on their manuscripts. Updates automatically as new submissions come in.",
     },
   ];
 
@@ -86,8 +92,7 @@ function MetricsPage() {
     {
       value: "2 weeks",
       label: "Median to first peer review",
-      detail:
-        "How long, on average, until the first reviewer report is returned to the author.",
+      detail: "How long, on average, until the first reviewer report is returned to the author.",
     },
     {
       value: "4 weeks",
@@ -112,15 +117,11 @@ function MetricsPage() {
           figure we are not yet able to report.
         </p>
 
-
-
         <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {reach.map((m) => (
             <div key={m.label} className="border border-border bg-card p-6">
               <p className="font-serif text-4xl text-primary">{m.value}</p>
-              <p className="mt-2 text-[11px] uppercase tracking-[0.2em] text-accent">
-                {m.label}
-              </p>
+              <p className="mt-2 text-[11px] uppercase tracking-[0.2em] text-accent">{m.label}</p>
               <p className="mt-3 text-sm text-foreground/80 leading-relaxed">{m.detail}</p>
             </div>
           ))}
@@ -139,8 +140,8 @@ function MetricsPage() {
             Total impact score
           </p>
           <p className="mt-3 text-sm text-foreground/80 leading-relaxed">
-            Citations recorded this year to articles published in the previous two years, divided
-            by the number of those articles.
+            Citations recorded this year to articles published in the previous two years, divided by
+            the number of those articles.
           </p>
         </div>
 
@@ -152,14 +153,11 @@ function MetricsPage() {
             : "Baseline targets — these update automatically once enough manuscripts have moved through review."}
         </p>
 
-
         <div className="mt-8 grid gap-6 sm:grid-cols-3">
           {turnaround.map((m) => (
             <div key={m.label} className="border border-border bg-card p-6">
               <p className="font-serif text-4xl text-primary">{m.value}</p>
-              <p className="mt-2 text-[11px] uppercase tracking-[0.2em] text-accent">
-                {m.label}
-              </p>
+              <p className="mt-2 text-[11px] uppercase tracking-[0.2em] text-accent">{m.label}</p>
               <p className="mt-3 text-sm text-foreground/80 leading-relaxed">{m.detail}</p>
             </div>
           ))}

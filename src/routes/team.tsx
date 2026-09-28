@@ -19,7 +19,11 @@ export const Route = createFileRoute("/team")({
         content:
           "Meet the NYRJ Team — the students leading peer review, section editing, and copy editing at the National Youth Research Journal.",
       },
-      { name: "keywords", content: "editorial board student journal, student journal editors, peer reviewers, youth research journal team, editorial staff" },
+      {
+        name: "keywords",
+        content:
+          "editorial board student journal, student journal editors, peer reviewers, youth research journal team, editorial staff",
+      },
       { property: "og:title", content: "The NYRJ Team" },
       { property: "og:url", content: "https://nyrj.org/team" },
     ],
@@ -59,8 +63,8 @@ function TeamPage() {
           The NYRJ Team
         </h2>
         <p className="mt-4 text-muted-foreground max-w-2xl">
-          The students leading peer review, section editing, and copy editing at the National
-          Youth Research Journal.
+          The students leading peer review, section editing, and copy editing at the National Youth
+          Research Journal.
         </p>
 
         {loading ? (
@@ -71,10 +75,7 @@ function TeamPage() {
           </p>
         ) : (
           <>
-            <MemberGroup
-              title="Team"
-              members={team.filter((m) => m.member_group !== "reviewer")}
-            />
+            <MemberGroup title="Team" members={team.filter((m) => m.member_group !== "reviewer")} />
             <MemberGroup
               title="Peer Reviewers"
               members={team.filter((m) => m.member_group === "reviewer")}
@@ -123,9 +124,7 @@ function MemberGroup({ title, members }: { title: string; members: EditorRow[] }
             <div className="flex-1 min-w-0">
               <h4 className="font-serif text-2xl text-primary">{m.name}</h4>
               {m.role && (
-                <p className="text-[11px] uppercase tracking-[0.2em] text-accent mt-1">
-                  {m.role}
-                </p>
+                <p className="text-[11px] uppercase tracking-[0.2em] text-accent mt-1">{m.role}</p>
               )}
               {m.affiliation && (
                 <p className="text-sm text-muted-foreground mt-1">{m.affiliation}</p>
@@ -223,9 +222,7 @@ function TeamManager({
     setError(null);
     setDone(null);
     try {
-      let photoData:
-        | { photoBase64: string; photoMime: string; photoFileName: string }
-        | undefined;
+      let photoData: { photoBase64: string; photoMime: string; photoFileName: string } | undefined;
       if (photoFile) {
         const { base64, mime, fileName } = await fileToBase64(photoFile);
         photoData = { photoBase64: base64, photoMime: mime, photoFileName: fileName };
@@ -361,12 +358,7 @@ function TeamManager({
           </label>
           <label className="inline-block px-4 py-2 bg-primary text-primary-foreground text-xs uppercase tracking-[0.2em] cursor-pointer hover:bg-accent">
             Choose File
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handlePhotoChange}
-              className="hidden"
-            />
+            <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
           </label>
           {photoFile && (
             <span className="ml-3 text-xs text-muted-foreground">{photoFile.name}</span>
@@ -440,16 +432,8 @@ function TeamManager({
                       {r.member_group === "reviewer" ? "Peer Reviewer" : "Team"}
                     </em>
                   </span>
-                  <EditToggle
-                    id={r.id}
-                    editingId={editingId}
-                    setEditingId={setEditingId}
-                  />
-                  <PhotoActions
-                    row={r}
-                    onUpdate={handleUpdatePhoto}
-                    onRemove={handleRemovePhoto}
-                  />
+                  <EditToggle id={r.id} editingId={editingId} setEditingId={setEditingId} />
+                  <PhotoActions row={r} onUpdate={handleUpdatePhoto} onRemove={handleRemovePhoto} />
                   <button
                     type="button"
                     onClick={() => handleDelete(r)}
@@ -537,9 +521,7 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-xs uppercase tracking-[0.2em] text-accent mb-1">
-        {label}
-      </label>
+      <label className="block text-xs uppercase tracking-[0.2em] text-accent mb-1">{label}</label>
       <input
         type="text"
         value={value}
@@ -567,9 +549,7 @@ function EditToggle({
       type="button"
       onClick={() => setEditingId(active ? null : id)}
       className={`px-2 py-1 border border-border text-xs transition ${
-        active
-          ? "bg-accent text-accent-foreground"
-          : "hover:bg-accent hover:text-accent-foreground"
+        active ? "bg-accent text-accent-foreground" : "hover:bg-accent hover:text-accent-foreground"
       }`}
       title={active ? "Cancel edit" : "Edit info"}
     >
@@ -637,9 +617,7 @@ function EditMemberForm({
       <Field label="Affiliation" value={affiliation} onChange={setAffiliation} />
       <Field label="Email" value={email} onChange={setEmail} />
       <div>
-        <label className="block text-xs uppercase tracking-[0.2em] text-accent mb-1">
-          Section
-        </label>
+        <label className="block text-xs uppercase tracking-[0.2em] text-accent mb-1">Section</label>
         <select
           value={memberGroup}
           onChange={(e) => setMemberGroup(e.target.value as "editorial" | "reviewer")}

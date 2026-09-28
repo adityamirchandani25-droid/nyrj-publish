@@ -276,21 +276,20 @@ export const submitRecommendation = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
 
     try {
-      const { sendTemplateEmail } = await import("./email-templates/send-email");
-      for (const to of STAFF_RECIPIENTS) {
-        await sendTemplateEmail("editor-recommendation", to, {
-          idempotencyKey: `editor-rec-${data.submissionId}-${me.id}-${Date.now()}`,
-          replyTo: me.email,
-          templateData: {
-            editorName: me.name,
-            editorEmail: me.email,
-            title: s.title,
-            action: data.action,
-            comments: data.comments,
-            dashboardUrl: `${SITE_URL}/admin/submissions`,
-          },
-        });
-      }
+      const { sendTemplateEmailToMany } = await import("./email-templates/send-email");
+      const stamp = Date.now();
+      await sendTemplateEmailToMany("editor-recommendation", STAFF_RECIPIENTS, (to) => ({
+        idempotencyKey: `editor-rec-${data.submissionId}-${me.id}-${stamp}-${to}`,
+        replyTo: me.email,
+        templateData: {
+          editorName: me.name,
+          editorEmail: me.email,
+          title: s.title,
+          action: data.action,
+          comments: data.comments,
+          dashboardUrl: `${SITE_URL}/admin/submissions`,
+        },
+      }));
     } catch (err) {
       console.error("[server] editor recommendation email failed:", err);
     }
@@ -332,7 +331,10 @@ export const listRecommendations = createServerFn({ method: "POST" })
         titles.set(s.id, s.title);
       }
     }
-    return list.map((r) => ({ ...r, submission_title: titles.get(r.submission_id) ?? "Manuscript" }));
+    return list.map((r) => ({
+      ...r,
+      submission_title: titles.get(r.submission_id) ?? "Manuscript",
+    }));
   });
 
 /** Staff approve (and optionally edit) a recommendation. Only now does the author hear anything. */
@@ -358,7 +360,12 @@ export const resolveRecommendation = createServerFn({ method: "POST" })
       .eq("id", data.id)
       .single();
     if (error || !recRow) throw new Error("Recommendation not found.");
-    const rec = recRow as { submission_id: string; action: string; comments: string; status: string };
+    const rec = recRow as {
+      submission_id: string;
+      action: string;
+      comments: string;
+      status: string;
+    };
     if (rec.status !== "pending") throw new Error("This recommendation was already handled.");
 
     const now = new Date().toISOString();
@@ -373,7 +380,12 @@ export const resolveRecommendation = createServerFn({ method: "POST" })
           staff_message: data.message,
         } as never)
         .eq("id", data.id);
-      await audit(rec.submission_id, data.reviewedBy, "Editor recommendation declined by staff", "");
+      await audit(
+        rec.submission_id,
+        data.reviewedBy,
+        "Editor recommendation declined by staff",
+        "",
+      );
       return { ok: true, emailed: false };
     }
 
@@ -471,7 +483,9 @@ export const listVersions = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows, error } = await supabaseAdmin
       .from("manuscript_versions")
-      .select("id, submission_id, version, manuscript_filename, manuscript_path, label, note, created_at")
+      .select(
+        "id, submission_id, version, manuscript_filename, manuscript_path, label, note, created_at",
+      )
       .eq("submission_id", data.submissionId)
       .order("version", { ascending: false });
     if (error) throw new Error(error.message);
@@ -561,9 +575,10 @@ export const finalizeRevision = createServerFn({ method: "POST" })
       .eq("id", row.id);
 
     try {
-      const { sendTemplateEmail } = await import("./email-templates/send-email");
-      for (const to of STAFF_RECIPIENTS) {
-        await sendTemplateEmail("revision-received", to, {
+      const { sendTemplateEmail, sendTemplateEmailToMany } =
+        await import("./email-templates/send-email");
+      const results = await Promise.allSettled([
+        sendTemplateEmailToMany("revision-received", STAFF_RECIPIENTS, (to) => ({
           idempotencyKey: `revision-staff-${row.id}-v${nextVersion}-${to}`,
           replyTo: row.submitter_email,
           templateData: {
@@ -573,23 +588,30 @@ export const finalizeRevision = createServerFn({ method: "POST" })
             toAuthor: false,
             note: data.note,
           },
-        });
-      }
-      await sendTemplateEmail("revision-received", row.submitter_email, {
-        idempotencyKey: `revision-author-${row.id}-v${nextVersion}`,
-        replyTo: "NYRJINFO@gmail.com",
-        templateData: {
-          title: row.title,
-          version: nextVersion,
-          submitterEmail: row.submitter_email,
-          toAuthor: true,
-          note: "",
-        },
-      });
+        })),
+        sendTemplateEmail("revision-received", row.submitter_email, {
+          idempotencyKey: `revision-author-${row.id}-v${nextVersion}`,
+          replyTo: "NYRJINFO@gmail.com",
+          templateData: {
+            title: row.title,
+            version: nextVersion,
+            submitterEmail: row.submitter_email,
+            toAuthor: true,
+            note: "",
+          },
+        }),
+      ]);
+      const failures = results.filter((result) => result.status === "rejected");
+      if (failures.length) throw new Error(`${failures.length} revision email group(s) failed`);
     } catch (err) {
       console.error("[server] revision emails failed:", err);
     }
 
-    await audit(row.id, row.submitter_email, "Revised manuscript uploaded", `Version ${nextVersion}`);
+    await audit(
+      row.id,
+      row.submitter_email,
+      "Revised manuscript uploaded",
+      `Version ${nextVersion}`,
+    );
     return { ok: true, version: nextVersion };
   });

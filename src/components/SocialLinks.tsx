@@ -18,12 +18,7 @@ export function SocialLink({
   children: ReactNode;
 }) {
   return (
-    <a
-      href={href}
-      rel="external"
-      aria-label={label}
-      className={className}
-    >
+    <a href={href} rel="external" aria-label={label} className={className}>
       {children}
     </a>
   );

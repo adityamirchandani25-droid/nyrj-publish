@@ -6,7 +6,7 @@ const LEGACY_GATEWAY = "https://connector-gateway.lovable.dev/microsoft_excel";
 const WORKBOOK_PATH = "/me/drive/root:%2FNYRJ%20Submissions.xlsx:";
 const SHEET = "Submissions";
 
-function connection() {
+function connection(): { gateway: string; headers: Record<string, string> } | null {
   const graphToken = process.env["MICROSOFT_GRAPH_ACCESS_TOKEN"];
   if (graphToken) {
     return {

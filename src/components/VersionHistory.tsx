@@ -43,9 +43,7 @@ export function VersionHistory({ submissionId }: { submissionId: string }) {
             <span className="text-primary">
               v{v.version} — {v.label}
             </span>
-            <span className="text-muted-foreground">
-              {new Date(v.created_at).toLocaleString()}
-            </span>
+            <span className="text-muted-foreground">{new Date(v.created_at).toLocaleString()}</span>
             <button
               onClick={() => void download(v.manuscript_path, v.manuscript_filename)}
               className="px-2 py-1 border border-border text-[10px] uppercase tracking-[0.18em] hover:bg-muted"

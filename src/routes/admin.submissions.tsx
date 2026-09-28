@@ -20,7 +20,6 @@ import { EditorAdmin } from "@/components/EditorAdmin";
 import { SentEmails } from "@/components/SentEmails";
 import { VersionHistory } from "@/components/VersionHistory";
 
-
 export const Route = createFileRoute("/admin/submissions")({
   head: () => ({
     meta: [
@@ -47,9 +46,9 @@ const DECISION_OPTIONS = ["pending", "accepted", "declined"] as const;
 
 function AdminSubmissions() {
   const [session, setSession] = useState<Session | null>(null);
-  const [tab, setTab] = useState<
-    "active" | "trash" | "reviewers" | "editors" | "emails" | "audit"
-  >("active");
+  const [tab, setTab] = useState<"active" | "trash" | "reviewers" | "editors" | "emails" | "audit">(
+    "active",
+  );
   const [rows, setRows] = useState<Row[] | null>(null);
   const [trashed, setTrashed] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,8 +57,6 @@ function AdminSubmissions() {
   const [reviewFor, setReviewFor] = useState<string | null>(null);
   const [libraryFor, setLibraryFor] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(false);
-
-
 
   useEffect(() => {
     setSession(getSession());
@@ -110,9 +107,7 @@ function AdminSubmissions() {
       await updateManuscriptSubmission({
         data: { staffToken: staffToken(), id, ...patch },
       });
-      setRows((cur) =>
-        cur?.map((r) => (r.id === id ? { ...r, ...patch } : r)) ?? cur,
-      );
+      setRows((cur) => cur?.map((r) => (r.id === id ? { ...r, ...patch } : r)) ?? cur);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Update failed.");
     } finally {
@@ -139,7 +134,8 @@ function AdminSubmissions() {
   }
 
   async function moveToTrash(id: string) {
-    if (!window.confirm("Move this submission to Trash? Editors can restore it within 30 days.")) return;
+    if (!window.confirm("Move this submission to Trash? Editors can restore it within 30 days."))
+      return;
     try {
       await trashManuscriptSubmission({ data: { staffToken: staffToken(), id } });
       await refresh();
@@ -170,15 +166,14 @@ function AdminSubmissions() {
   const isListTab = tab === "active" || tab === "trash";
   const visibleRows = tab === "active" ? rows : tab === "trash" ? trashed : null;
 
-
   return (
     <SiteLayout>
       <section className="mx-auto max-w-6xl px-6 py-16">
         <p className="text-[10px] uppercase tracking-[0.35em] text-accent">Staff Dashboard</p>
         <h1 className="font-serif text-4xl text-primary mt-3">Manuscript Submissions</h1>
         <p className="mt-3 text-muted-foreground max-w-2xl">
-          Every submission from the on-site form. Change status or decision — updates appear on
-          the author's Track Submissions page immediately.
+          Every submission from the on-site form. Change status or decision — updates appear on the
+          author's Track Submissions page immediately.
         </p>
 
         <div className="mt-6 flex flex-wrap gap-2">
@@ -226,10 +221,7 @@ function AdminSubmissions() {
           </button>
         </div>
 
-        {showManual && (
-          <ManualLibraryAddForm onDone={() => setShowManual(false)} />
-        )}
-
+        {showManual && <ManualLibraryAddForm onDone={() => setShowManual(false)} />}
 
         {tab === "trash" && (
           <p className="mt-4 text-xs text-muted-foreground italic">
@@ -251,7 +243,6 @@ function AdminSubmissions() {
         {isListTab && !visibleRows && !error && (
           <p className="mt-8 text-sm text-muted-foreground">Loading…</p>
         )}
-
 
         {visibleRows && visibleRows.length === 0 && (
           <p className="mt-8 text-sm text-muted-foreground italic">
@@ -371,10 +362,7 @@ function AdminSubmissions() {
                   </div>
                 )}
 
-                {tab === "active" && reviewFor === r.id && (
-                  <PeerReviewPanel submissionId={r.id} />
-                )}
-
+                {tab === "active" && reviewFor === r.id && <PeerReviewPanel submissionId={r.id} />}
 
                 {tab === "active" && libraryFor === r.id && (
                   <AddToLibraryForm
@@ -390,7 +378,9 @@ function AdminSubmissions() {
                     <VersionHistory submissionId={r.id} />
                     {r.manuscript_path && (
                       <div>
-                        <p className="text-[10px] uppercase tracking-[0.18em] text-accent">Manuscript file</p>
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-accent">
+                          Manuscript file
+                        </p>
                         <button
                           onClick={() =>
                             void downloadFile(
@@ -411,21 +401,25 @@ function AdminSubmissions() {
                           Additional files
                         </p>
                         <ul className="mt-1 space-y-2 text-xs">
-                          {(r.supplementary_paths as Array<{ path: string; filename: string; description?: string }>).map(
-                            (f, i) => (
-                              <li key={i} className="border border-border p-2 bg-background">
-                                <button
-                                  onClick={() => void downloadFile(f.path, f.filename)}
-                                  className="text-accent underline underline-offset-2 hover:text-primary"
-                                >
-                                  ↓ {f.filename}
-                                </button>
-                                {f.description && (
-                                  <p className="mt-1 text-muted-foreground italic">{f.description}</p>
-                                )}
-                              </li>
-                            ),
-                          )}
+                          {(
+                            r.supplementary_paths as Array<{
+                              path: string;
+                              filename: string;
+                              description?: string;
+                            }>
+                          ).map((f, i) => (
+                            <li key={i} className="border border-border p-2 bg-background">
+                              <button
+                                onClick={() => void downloadFile(f.path, f.filename)}
+                                className="text-accent underline underline-offset-2 hover:text-primary"
+                              >
+                                ↓ {f.filename}
+                              </button>
+                              {f.description && (
+                                <p className="mt-1 text-muted-foreground italic">{f.description}</p>
+                              )}
+                            </li>
+                          ))}
                         </ul>
                       </div>
                     )}
@@ -436,16 +430,18 @@ function AdminSubmissions() {
                           Consent form files
                         </p>
                         <ul className="mt-1 space-y-1 text-xs">
-                          {(r.consent_form_paths as Array<{ path: string; filename: string }>).map((f, i) => (
-                            <li key={i}>
-                              <button
-                                onClick={() => void downloadFile(f.path, f.filename)}
-                                className="text-accent underline underline-offset-2 hover:text-primary"
-                              >
-                                ↓ {f.filename}
-                              </button>
-                            </li>
-                          ))}
+                          {(r.consent_form_paths as Array<{ path: string; filename: string }>).map(
+                            (f, i) => (
+                              <li key={i}>
+                                <button
+                                  onClick={() => void downloadFile(f.path, f.filename)}
+                                  className="text-accent underline underline-offset-2 hover:text-primary"
+                                >
+                                  ↓ {f.filename}
+                                </button>
+                              </li>
+                            ),
+                          )}
                         </ul>
                       </div>
                     )}
@@ -456,7 +452,9 @@ function AdminSubmissions() {
                     </div>
 
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-accent">Research type</p>
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-accent">
+                        Research type
+                      </p>
                       <p className="mt-1 text-xs">
                         {r.research_type ?? "—"}
                         {r.research_type === "Other" && r.research_type_other
@@ -466,9 +464,13 @@ function AdminSubmissions() {
                     </div>
 
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-accent">Abstract</p>
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-accent">
+                        Abstract
+                      </p>
                       <p className="mt-1 whitespace-pre-line text-xs">
-                        {r.abstract || <span className="text-muted-foreground italic">(none provided)</span>}
+                        {r.abstract || (
+                          <span className="text-muted-foreground italic">(none provided)</span>
+                        )}
                       </p>
                     </div>
 
@@ -480,15 +482,24 @@ function AdminSubmissions() {
                             <li key={i} className="text-xs">
                               <p className="font-medium text-primary">{a.name || "—"}</p>
                               <dl className="mt-1 grid grid-cols-[110px_1fr] gap-x-2 gap-y-0.5 text-muted-foreground">
-                                <dt>Email</dt><dd>{a.email || "—"}</dd>
-                                <dt>Institution</dt><dd>{a.institution || "—"}</dd>
-                                <dt>ORCID</dt><dd>{a.orcid || "—"}</dd>
-                                <dt>Address</dt><dd>{a.address || "—"}</dd>
-                                <dt>City</dt><dd>{a.city || "—"}</dd>
-                                <dt>State/Region</dt><dd>{a.state || "—"}</dd>
-                                <dt>ZIP/Postal</dt><dd>{a.zip || "—"}</dd>
-                                <dt>Nation</dt><dd>{a.nation || "—"}</dd>
-                                <dt>Inst. address</dt><dd>{a.institutionAddress || "—"}</dd>
+                                <dt>Email</dt>
+                                <dd>{a.email || "—"}</dd>
+                                <dt>Institution</dt>
+                                <dd>{a.institution || "—"}</dd>
+                                <dt>ORCID</dt>
+                                <dd>{a.orcid || "—"}</dd>
+                                <dt>Address</dt>
+                                <dd>{a.address || "—"}</dd>
+                                <dt>City</dt>
+                                <dd>{a.city || "—"}</dd>
+                                <dt>State/Region</dt>
+                                <dd>{a.state || "—"}</dd>
+                                <dt>ZIP/Postal</dt>
+                                <dd>{a.zip || "—"}</dd>
+                                <dt>Nation</dt>
+                                <dd>{a.nation || "—"}</dd>
+                                <dt>Inst. address</dt>
+                                <dd>{a.institutionAddress || "—"}</dd>
                               </dl>
                             </li>
                           ))}
@@ -510,11 +521,7 @@ function AdminSubmissions() {
                       value={r.used_gen_ai}
                       detail={r.gen_ai_explanation}
                     />
-                    <DeclarationRow
-                      label="Work is original"
-                      value={r.is_original}
-                      detail={null}
-                    />
+                    <DeclarationRow label="Work is original" value={r.is_original} detail={null} />
                     <DeclarationRow
                       label="Not under consideration elsewhere"
                       value={r.not_under_consideration}
@@ -527,7 +534,9 @@ function AdminSubmissions() {
                     />
 
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-accent">Data availability</p>
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-accent">
+                        Data availability
+                      </p>
                       <p className="mt-1 text-xs">
                         {r.data_availability === "openly_available_online"
                           ? "Openly available online"
@@ -570,7 +579,10 @@ function AddToLibraryForm({ row, onDone }: { row: Row; onDone: () => void }) {
   const authorList = Array.isArray(row.authors)
     ? (row.authors as Array<{ name?: string; orcid?: string; email?: string }>)
     : [];
-  const initialAuthors = authorList.map((a) => a?.name).filter(Boolean).join(", ");
+  const initialAuthors = authorList
+    .map((a) => a?.name)
+    .filter(Boolean)
+    .join(", ");
   const initialOrcids = authorList
     .map((a) => (a?.orcid ?? "").replace(/^https?:\/\/orcid\.org\//i, "").trim())
     .filter(Boolean)
@@ -578,7 +590,7 @@ function AddToLibraryForm({ row, onDone }: { row: Row; onDone: () => void }) {
   const today = new Date().toISOString().slice(0, 10);
   const initialTopic =
     (row.research_domain && row.research_domain.trim()) ||
-    (row.research_type === "other" ? row.research_type_other ?? "" : row.research_type ?? "");
+    (row.research_type === "other" ? (row.research_type_other ?? "") : (row.research_type ?? ""));
 
   const [title, setTitle] = useState(row.title);
   const [authors, setAuthors] = useState(initialAuthors);
@@ -635,62 +647,116 @@ function AddToLibraryForm({ row, onDone }: { row: Row; onDone: () => void }) {
       <p className="uppercase tracking-[0.2em] text-accent">Publish to Library</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Title</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Title
+          </span>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Author(s)</span>
-          <input value={authors} onChange={(e) => setAuthors(e.target.value)} required
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Author(s)
+          </span>
+          <input
+            value={authors}
+            onChange={(e) => setAuthors(e.target.value)}
+            required
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Issue</span>
-          <input value={issue} onChange={(e) => setIssue(e.target.value)} placeholder="Vol. I · Issue 1"
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Issue
+          </span>
+          <input
+            value={issue}
+            onChange={(e) => setIssue(e.target.value)}
+            placeholder="Vol. I · Issue 1"
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Topic</span>
-          <input value={topic} onChange={(e) => setTopic(e.target.value)}
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Topic
+          </span>
+          <input
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block">
           <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">DOI</span>
-          <input value={doi} onChange={(e) => setDoi(e.target.value)} placeholder="10.xxxx/xxxxxx"
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+          <input
+            value={doi}
+            onChange={(e) => setDoi(e.target.value)}
+            placeholder="10.xxxx/xxxxxx"
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Publication date</span>
-          <input type="date" value={publicationDate} onChange={(e) => setPublicationDate(e.target.value)}
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Publication date
+          </span>
+          <input
+            type="date"
+            value={publicationDate}
+            onChange={(e) => setPublicationDate(e.target.value)}
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block sm:col-span-2">
           <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
             ORCID(s) — comma or space separated
           </span>
-          <input value={orcids} onChange={(e) => setOrcids(e.target.value)}
+          <input
+            value={orcids}
+            onChange={(e) => setOrcids(e.target.value)}
             placeholder="0000-0002-1825-0097, 0000-0001-2345-6789"
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block sm:col-span-2">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Keywords (comma separated)</span>
-          <input value={keywords} onChange={(e) => setKeywords(e.target.value)}
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Keywords (comma separated)
+          </span>
+          <input
+            value={keywords}
+            onChange={(e) => setKeywords(e.target.value)}
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block sm:col-span-2">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Abstract</span>
-          <textarea value={abstract} onChange={(e) => setAbstract(e.target.value)} rows={4}
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Abstract
+          </span>
+          <textarea
+            value={abstract}
+            onChange={(e) => setAbstract(e.target.value)}
+            rows={4}
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
       </div>
       <label className="flex items-center gap-2">
-        <input type="checkbox" checked={awardWinner} onChange={(e) => setAwardWinner(e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={awardWinner}
+          onChange={(e) => setAwardWinner(e.target.checked)}
+        />
         <span>🏆 Mark as Award Winner</span>
       </label>
       {awardWinner && (
-        <input value={awardLabel} onChange={(e) => setAwardLabel(e.target.value)}
+        <input
+          value={awardLabel}
+          onChange={(e) => setAwardLabel(e.target.value)}
           placeholder="Award label (optional)"
-          className="w-full border border-border bg-background px-2 py-1.5" />
+          className="w-full border border-border bg-background px-2 py-1.5"
+        />
       )}
       <label className="flex items-center gap-2">
         <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />
@@ -698,8 +764,11 @@ function AddToLibraryForm({ row, onDone }: { row: Row; onDone: () => void }) {
       </label>
       {err && <p className="text-destructive">{err}</p>}
       {msg && <p className="text-accent">{msg}</p>}
-      <button type="submit" disabled={busy}
-        className="px-4 py-2 bg-primary text-primary-foreground uppercase tracking-[0.18em] hover:bg-accent disabled:opacity-50">
+      <button
+        type="submit"
+        disabled={busy}
+        className="px-4 py-2 bg-primary text-primary-foreground uppercase tracking-[0.18em] hover:bg-accent disabled:opacity-50"
+      >
         {busy ? "Publishing…" : "Publish to Library"}
       </button>
     </form>
@@ -747,16 +816,29 @@ function ManualLibraryAddForm({ onDone }: { onDone: () => void }) {
   const [err, setErr] = useState<string | null>(null);
 
   function reset() {
-    setTitle(""); setAuthors(""); setIssue(""); setTopic("");
-    setAuthorEmail(""); setKeywords(""); setDoi(""); setOrcids("");
-    setAwardWinner(false); setAwardLabel(""); setFeatured(false); setFile(null);
+    setTitle("");
+    setAuthors("");
+    setIssue("");
+    setTopic("");
+    setAuthorEmail("");
+    setKeywords("");
+    setDoi("");
+    setOrcids("");
+    setAwardWinner(false);
+    setAwardLabel("");
+    setFeatured(false);
+    setFile(null);
     setFileKey((k) => k + 1);
   }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    setErr(null); setMsg(null);
-    if (!file) { setErr("Please select a PDF or Word file."); return; }
+    setErr(null);
+    setMsg(null);
+    if (!file) {
+      setErr("Please select a PDF or Word file.");
+      return;
+    }
     setBusy(true);
     try {
       await addEntry({
@@ -765,9 +847,15 @@ function ManualLibraryAddForm({ onDone }: { onDone: () => void }) {
         issue: issue.trim() || undefined,
         topic: topic.trim() || undefined,
         authorEmail: authorEmail.trim() || undefined,
-        keywords: keywords.split(/[,\n]/).map((s) => s.trim()).filter(Boolean),
+        keywords: keywords
+          .split(/[,\n]/)
+          .map((s) => s.trim())
+          .filter(Boolean),
         doi: doi.trim() || undefined,
-        orcids: orcids.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean),
+        orcids: orcids
+          .split(/[,\s]+/)
+          .map((s) => s.trim())
+          .filter(Boolean),
         awardWinner,
         awardLabel: awardWinner ? awardLabel.trim() || undefined : undefined,
         featured,
@@ -787,53 +875,93 @@ function ManualLibraryAddForm({ onDone }: { onDone: () => void }) {
     <form onSubmit={submit} className="mt-4 border border-accent bg-muted/30 p-4 space-y-3 text-xs">
       <p className="uppercase tracking-[0.2em] text-accent">Manually Add Manuscript to Library</p>
       <p className="text-muted-foreground">
-        Use this for papers that weren't submitted through the on-site form (e.g. legacy issues, direct emails).
+        Use this for papers that weren't submitted through the on-site form (e.g. legacy issues,
+        direct emails).
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Title *</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Title *
+          </span>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Author(s) *</span>
-          <input value={authors} onChange={(e) => setAuthors(e.target.value)} required
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Author(s) *
+          </span>
+          <input
+            value={authors}
+            onChange={(e) => setAuthors(e.target.value)}
+            required
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Issue</span>
-          <input value={issue} onChange={(e) => setIssue(e.target.value)} placeholder="Vol. I · Issue 1"
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Issue
+          </span>
+          <input
+            value={issue}
+            onChange={(e) => setIssue(e.target.value)}
+            placeholder="Vol. I · Issue 1"
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Topic</span>
-          <input value={topic} onChange={(e) => setTopic(e.target.value)}
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Topic
+          </span>
+          <input
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Author email</span>
-          <input type="email" value={authorEmail} onChange={(e) => setAuthorEmail(e.target.value)}
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Author email
+          </span>
+          <input
+            type="email"
+            value={authorEmail}
+            onChange={(e) => setAuthorEmail(e.target.value)}
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block">
           <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">DOI</span>
-          <input value={doi} onChange={(e) => setDoi(e.target.value)} placeholder="10.xxxx/xxxxxx"
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+          <input
+            value={doi}
+            onChange={(e) => setDoi(e.target.value)}
+            placeholder="10.xxxx/xxxxxx"
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block sm:col-span-2">
           <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
             ORCID(s) — comma or space separated
           </span>
-          <input value={orcids} onChange={(e) => setOrcids(e.target.value)}
+          <input
+            value={orcids}
+            onChange={(e) => setOrcids(e.target.value)}
             placeholder="0000-0002-1825-0097, 0000-0001-2345-6789"
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block sm:col-span-2">
           <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
             Keywords — comma separated
           </span>
-          <input value={keywords} onChange={(e) => setKeywords(e.target.value)}
-            className="mt-1 w-full border border-border bg-background px-2 py-1.5" />
+          <input
+            value={keywords}
+            onChange={(e) => setKeywords(e.target.value)}
+            className="mt-1 w-full border border-border bg-background px-2 py-1.5"
+          />
         </label>
         <label className="block sm:col-span-2">
           <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -848,21 +976,34 @@ function ManualLibraryAddForm({ onDone }: { onDone: () => void }) {
             className="mt-1 w-full border border-border bg-background px-2 py-1.5"
           />
           {file && (
-            <button type="button" onClick={() => { setFile(null); setFileKey((k) => k + 1); }}
-              className="mt-1 text-[10px] uppercase tracking-[0.18em] text-destructive hover:underline">
+            <button
+              type="button"
+              onClick={() => {
+                setFile(null);
+                setFileKey((k) => k + 1);
+              }}
+              className="mt-1 text-[10px] uppercase tracking-[0.18em] text-destructive hover:underline"
+            >
               Remove file
             </button>
           )}
         </label>
       </div>
       <label className="flex items-center gap-2">
-        <input type="checkbox" checked={awardWinner} onChange={(e) => setAwardWinner(e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={awardWinner}
+          onChange={(e) => setAwardWinner(e.target.checked)}
+        />
         <span>🏆 Mark as Award Winner</span>
       </label>
       {awardWinner && (
-        <input value={awardLabel} onChange={(e) => setAwardLabel(e.target.value)}
+        <input
+          value={awardLabel}
+          onChange={(e) => setAwardLabel(e.target.value)}
           placeholder="Award label (optional)"
-          className="w-full border border-border bg-background px-2 py-1.5" />
+          className="w-full border border-border bg-background px-2 py-1.5"
+        />
       )}
       <label className="flex items-center gap-2">
         <input type="checkbox" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />
@@ -871,16 +1012,21 @@ function ManualLibraryAddForm({ onDone }: { onDone: () => void }) {
       {err && <p className="text-destructive">{err}</p>}
       {msg && <p className="text-accent">{msg}</p>}
       <div className="flex gap-2">
-        <button type="submit" disabled={busy}
-          className="px-4 py-2 bg-primary text-primary-foreground uppercase tracking-[0.18em] hover:bg-accent disabled:opacity-50">
+        <button
+          type="submit"
+          disabled={busy}
+          className="px-4 py-2 bg-primary text-primary-foreground uppercase tracking-[0.18em] hover:bg-accent disabled:opacity-50"
+        >
           {busy ? "Uploading…" : "Add to Library"}
         </button>
-        <button type="button" onClick={onDone}
-          className="px-4 py-2 border border-border uppercase tracking-[0.18em] hover:bg-muted">
+        <button
+          type="button"
+          onClick={onDone}
+          className="px-4 py-2 border border-border uppercase tracking-[0.18em] hover:bg-muted"
+        >
           Close
         </button>
       </div>
     </form>
   );
 }
-

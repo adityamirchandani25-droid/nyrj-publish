@@ -29,28 +29,27 @@ export const siteSearch = createServerFn({ method: "GET" })
   .inputValidator((d: unknown) => QuerySchema.parse(d))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const supa = supabaseAdmin as any;
     const term = safeTerm(data.q);
     if (term === `"%%"`) return [] as SearchHit[];
     const hits: SearchHit[] = [];
 
     const [lib, adv, evt, team] = await Promise.all([
-      supa
+      supabaseAdmin
         .from("library_entries")
         .select("id, title, authors, slug, topic, issue")
         .or(`title.ilike.${term},authors.ilike.${term},topic.ilike.${term}`)
         .limit(20),
-      supa
+      supabaseAdmin
         .from("advisors")
         .select("id, name, title, affiliation, bio")
         .or(`name.ilike.${term},title.ilike.${term},affiliation.ilike.${term},bio.ilike.${term}`)
         .limit(20),
-      supa
+      supabaseAdmin
         .from("events")
         .select("id, title, description, event_date")
         .or(`title.ilike.${term},description.ilike.${term}`)
         .limit(20),
-      supa
+      supabaseAdmin
         .from("editorial_team")
         .select("id, name, role, affiliation, bio")
         .or(`name.ilike.${term},role.ilike.${term},affiliation.ilike.${term},bio.ilike.${term}`)

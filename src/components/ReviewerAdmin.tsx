@@ -17,6 +17,7 @@ const btnGhost =
 export function ReviewerAccounts() {
   const [rows, setRows] = useState<ReviewerRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
   async function load() {
@@ -34,10 +35,16 @@ export function ReviewerAccounts() {
   async function decide(id: string, status: "approved" | "rejected") {
     setBusy(id);
     setError(null);
+    setNotice(null);
     try {
-      await setReviewerStatus({
+      const result = await setReviewerStatus({
         data: { staffToken: staffToken(), id, status, actor: getSession()?.username ?? "staff" },
       });
+      setNotice(
+        result.emailSent
+          ? `Reviewer ${status}. Notification email sent.`
+          : `Reviewer ${status}, but the notification email failed. Retry it from Emails Sent after checking SendGrid.`,
+      );
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not update the reviewer.");
@@ -52,6 +59,7 @@ export function ReviewerAccounts() {
   return (
     <div className="mt-8 space-y-8">
       {error && <p className="text-sm text-destructive">{error}</p>}
+      {notice && <p className="text-sm text-accent">{notice}</p>}
       {rows === null && <p className="text-sm text-muted-foreground">Loading…</p>}
 
       <div>
@@ -112,7 +120,9 @@ export function ReviewerAccounts() {
                 <button
                   className={btnGhost}
                   disabled={busy === r.id}
-                  onClick={() => void decide(r.id, r.status === "approved" ? "rejected" : "approved")}
+                  onClick={() =>
+                    void decide(r.id, r.status === "approved" ? "rejected" : "approved")
+                  }
                 >
                   {r.status === "approved" ? "Revoke" : "Approve"}
                 </button>

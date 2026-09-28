@@ -1,6 +1,7 @@
 // Editorial team: public listing + staff-only create/update/delete.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 
 export type EditorRow = {
   id: string;
@@ -36,7 +37,7 @@ async function signPhoto(path: string | null): Promise<string | null> {
 
 export const editorsList = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await (supabaseAdmin as any)
+  const { data, error } = await supabaseAdmin
     .from("editorial_team")
     .select("*")
     .order("position", { ascending: true })
@@ -45,9 +46,8 @@ export const editorsList = createServerFn({ method: "GET" }).handler(async () =>
     console.error("[server] supabase error:", error);
     throw new Error("An unexpected error occurred. Please try again.");
   }
-  const rows = (data ?? []) as Array<any>;
   return Promise.all(
-    rows.map(async (r): Promise<EditorRow> => ({
+    (data ?? []).map(async (r): Promise<EditorRow> => ({
       id: r.id,
       name: r.name,
       role: r.role ?? null,
@@ -107,7 +107,7 @@ export const editorTeamCreate = createServerFn({ method: "POST" })
       );
     }
 
-    const { data: row, error } = await (supabaseAdmin as any)
+    const { data: row, error } = await supabaseAdmin
       .from("editorial_team")
       .insert({
         name: data.name,
@@ -135,7 +135,7 @@ export const editorTeamDelete = createServerFn({ method: "POST" })
     const { verifyStaffToken } = await import("./staff-auth.server");
     verifyStaffToken(data.staffToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: existing } = await (supabaseAdmin as any)
+    const { data: existing } = await supabaseAdmin
       .from("editorial_team")
       .select("photo_path")
       .eq("id", data.id)
@@ -143,10 +143,7 @@ export const editorTeamDelete = createServerFn({ method: "POST" })
     if (existing?.photo_path) {
       await supabaseAdmin.storage.from(PHOTO_BUCKET).remove([existing.photo_path]);
     }
-    const { error } = await (supabaseAdmin as any)
-      .from("editorial_team")
-      .delete()
-      .eq("id", data.id);
+    const { error } = await supabaseAdmin.from("editorial_team").delete().eq("id", data.id);
     if (error) {
       console.error("[server] supabase error:", error);
       throw new Error("An unexpected error occurred. Please try again.");
@@ -176,7 +173,7 @@ export const editorTeamUpdate = createServerFn({ method: "POST" })
     verifyStaffToken(data.staffToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const patch: Record<string, unknown> = {
+    const patch: TablesUpdate<"editorial_team"> = {
       name: data.name,
       role: data.role ?? null,
       affiliation: data.affiliation ?? null,
@@ -186,7 +183,7 @@ export const editorTeamUpdate = createServerFn({ method: "POST" })
     };
 
     if (data.removePhoto || (data.photoBase64 && data.photoMime)) {
-      const { data: existing } = await (supabaseAdmin as any)
+      const { data: existing } = await supabaseAdmin
         .from("editorial_team")
         .select("photo_path")
         .eq("id", data.id)
@@ -205,7 +202,7 @@ export const editorTeamUpdate = createServerFn({ method: "POST" })
       );
     }
 
-    const { data: row, error } = await (supabaseAdmin as any)
+    const { data: row, error } = await supabaseAdmin
       .from("editorial_team")
       .update(patch)
       .eq("id", data.id)
@@ -215,5 +212,5 @@ export const editorTeamUpdate = createServerFn({ method: "POST" })
       console.error("[server] supabase error:", error);
       throw new Error("An unexpected error occurred. Please try again.");
     }
-    return { ...row, photo_url: await signPhoto((row as any).photo_path ?? null) } as EditorRow;
+    return { ...row, photo_url: await signPhoto(row.photo_path) } as EditorRow;
   });

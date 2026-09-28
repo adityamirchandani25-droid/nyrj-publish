@@ -58,7 +58,9 @@ function AmbassadorPage() {
       <section className="mx-auto max-w-4xl px-6 py-12 space-y-12">
         <header className="flex justify-between items-start flex-wrap gap-4">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.35em] text-accent">Ambassador Dashboard</p>
+            <p className="text-[10px] uppercase tracking-[0.35em] text-accent">
+              Ambassador Dashboard
+            </p>
             <h1 className="font-serif text-4xl text-primary mt-2">Welcome, {session?.username}</h1>
             <p className="mt-2 text-sm text-muted-foreground max-w-xl">
               Please take attendance regularly so we know the number of new students in your club.
@@ -67,7 +69,10 @@ function AmbassadorPage() {
             </p>
           </div>
           <button
-            onClick={async () => { await logout(); setSession(null); }}
+            onClick={async () => {
+              await logout();
+              setSession(null);
+            }}
             className="text-xs text-muted-foreground hover:text-accent underline underline-offset-4"
           >
             Log out
@@ -130,12 +135,16 @@ function EventAttendancePanel() {
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    void getEventAttendance().then((n) => { setValue(n); setDraft(String(n)); });
+    void getEventAttendance().then((n) => {
+      setValue(n);
+      setDraft(String(n));
+    });
   }, []);
 
   async function save(e: FormEvent) {
     e.preventDefault();
-    setBusy(true); setMsg(null);
+    setBusy(true);
+    setMsg(null);
     try {
       const n = Math.max(0, Math.floor(Number(draft) || 0));
       const res = await setEventAttendance({ data: { password: ambassadorPassword(), value: n } });
@@ -143,7 +152,9 @@ function EventAttendancePanel() {
       setMsg("Saved.");
     } catch (err) {
       setMsg(err instanceof Error ? err.message : "Failed to save.");
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

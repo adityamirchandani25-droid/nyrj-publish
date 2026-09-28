@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 
 const PUBLIC_LIBRARY_COLUMNS =
   "id, slug, nyrj_id, doi, featured, citation_count, title, authors, issue, topic, grade, abstract, keywords, references_text, publication_date, orcids, award_winner, award_label, file_name, mime_type, file_path, added_at";
@@ -166,7 +167,7 @@ export const libraryUpdate = createServerFn({ method: "POST" })
     verifyStaffToken(data.staffToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const patch: Record<string, unknown> = {};
+    const patch: TablesUpdate<"library_entries"> = {};
     if (data.doi !== undefined) patch.doi = data.doi === "" ? null : data.doi;
     if (data.featured !== undefined) patch.featured = data.featured;
     if (data.awardWinner !== undefined) patch.award_winner = data.awardWinner;

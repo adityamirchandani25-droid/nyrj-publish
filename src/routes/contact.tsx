@@ -1,15 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SiteLayout } from "@/components/SiteLayout";
 
-
 export const Route = createFileRoute("/contact")({
   head: () => ({
     meta: [
       { title: "Contact the Editorial Office — NYRJ" },
-      { name: "description", content: "Reach the National Youth Research Journal editorial office for submissions, press, partnerships, or general inquiries." },
-      { name: "keywords", content: "contact student research journal, NYRJ contact, submit inquiry research journal, student journal editorial office" },
+      {
+        name: "description",
+        content:
+          "Reach the National Youth Research Journal editorial office for submissions, press, partnerships, or general inquiries.",
+      },
+      {
+        name: "keywords",
+        content:
+          "contact student research journal, NYRJ contact, submit inquiry research journal, student journal editorial office",
+      },
       { property: "og:title", content: "Contact the Editorial Office — NYRJ" },
-      { property: "og:description", content: "Reach the NYRJ editorial office for submissions, press, and partnerships." },
+      {
+        property: "og:description",
+        content: "Reach the NYRJ editorial office for submissions, press, and partnerships.",
+      },
       { property: "og:url", content: "https://nyrj.org/contact" },
     ],
     links: [{ rel: "canonical", href: "https://nyrj.org/contact" }],
@@ -21,7 +31,9 @@ function Contact() {
   return (
     <SiteLayout>
       <section className="mx-auto max-w-3xl px-6 py-16">
-        <p className="text-[10px] uppercase tracking-[0.35em] text-accent">Editorial Correspondence</p>
+        <p className="text-[10px] uppercase tracking-[0.35em] text-accent">
+          Editorial Correspondence
+        </p>
         <h1 className="font-serif text-4xl sm:text-5xl text-primary mt-3">Contact</h1>
         <p className="mt-4 text-muted-foreground">
           For any question submissions, review, partnerships, or press, feel free to write to the
@@ -40,7 +52,6 @@ function Contact() {
             email="nyrj.official@gmail.com"
           />
         </div>
-
 
         <div className="mt-12 border-t border-border pt-6 text-sm text-muted-foreground">
           <p>We respond to all inquiries within 3 business days.</p>

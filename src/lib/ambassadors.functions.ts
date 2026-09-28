@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { TablesInsert } from "@/integrations/supabase/types";
 
 const ALLOWED_PHOTO_MIME = new Set([
   "image/png",
@@ -93,11 +94,14 @@ function stripContact(c: Chapter): Chapter {
 
 async function loadChapters(): Promise<Chapter[]> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await (supabaseAdmin as any)
+  const { data, error } = await supabaseAdmin
     .from("chapters")
     .select(CHAPTER_COLUMNS)
     .order("chapter_number", { ascending: true });
-  if (error) { console.error("[server] database error:", error); throw new Error("Something went wrong. Please try again."); }
+  if (error) {
+    console.error("[server] database error:", error);
+    throw new Error("Something went wrong. Please try again.");
+  }
   const rows = (data ?? []) as Chapter[];
   const out: Chapter[] = [];
   for (const r of rows) out.push({ ...r, lead_photo_url: await signPhoto(r.lead_photo_path) });
@@ -105,9 +109,11 @@ async function loadChapters(): Promise<Chapter[]> {
 }
 
 /** Public listing — contact details removed. */
-export const listChapters = createServerFn({ method: "GET" }).handler(async (): Promise<Chapter[]> => {
-  return (await loadChapters()).map(stripContact);
-});
+export const listChapters = createServerFn({ method: "GET" }).handler(
+  async (): Promise<Chapter[]> => {
+    return (await loadChapters()).map(stripContact);
+  },
+);
 
 /** Staff/ambassador listing — includes contact details after authorization. */
 export const listChaptersAdmin = createServerFn({ method: "POST" })
@@ -123,12 +129,15 @@ export const getChapterBySlug = createServerFn({ method: "GET" })
   .inputValidator((d: unknown) => SlugInput.parse(d))
   .handler(async ({ data }): Promise<Chapter | null> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row, error } = await (supabaseAdmin as any)
+    const { data: row, error } = await supabaseAdmin
       .from("chapters")
       .select(CHAPTER_COLUMNS)
       .eq("slug", data.slug)
       .maybeSingle();
-    if (error) { console.error("[server] database error:", error); throw new Error("Something went wrong. Please try again."); }
+    if (error) {
+      console.error("[server] database error:", error);
+      throw new Error("Something went wrong. Please try again.");
+    }
     if (!row) return null;
     return stripContact({
       ...(row as Chapter),
@@ -153,12 +162,15 @@ export const saveChapter = createServerFn({ method: "POST" })
       const { error: upErr } = await supabaseAdmin.storage
         .from("chapter-photos")
         .upload(photoPath, bytes, { contentType: data.photoMime, upsert: false });
-      if (upErr) { console.error("[server] storage upload error:", upErr); throw new Error("Could not upload the photo. Please try again."); }
+      if (upErr) {
+        console.error("[server] storage upload error:", upErr);
+        throw new Error("Could not upload the photo. Please try again.");
+      }
     } else if (data.removePhoto) {
       photoPath = null;
     }
 
-    const row: Record<string, unknown> = {
+    const row: TablesInsert<"chapters"> = {
       chapter_number: data.chapter_number,
       school_name: data.school_name,
       location: data.location,
@@ -170,20 +182,26 @@ export const saveChapter = createServerFn({ method: "POST" })
       new_students_this_year: data.new_students_this_year,
       notes: data.notes ?? null,
     };
-    if (photoPath !== undefined) row['lead_photo_path'] = photoPath;
+    if (photoPath !== undefined) row.lead_photo_path = photoPath;
 
     if (data.id) {
-      const { error } = await (supabaseAdmin as any).from("chapters").update(row).eq("id", data.id);
-      if (error) { console.error("[server] database error:", error); throw new Error("Something went wrong. Please try again."); }
+      const { error } = await supabaseAdmin.from("chapters").update(row).eq("id", data.id);
+      if (error) {
+        console.error("[server] database error:", error);
+        throw new Error("Something went wrong. Please try again.");
+      }
       return { ok: true as const, id: data.id };
     }
-    const { data: ins, error } = await (supabaseAdmin as any)
+    const { data: ins, error } = await supabaseAdmin
       .from("chapters")
       .insert(row)
       .select("id")
       .single();
-    if (error) { console.error("[server] database error:", error); throw new Error("Something went wrong. Please try again."); }
-    return { ok: true as const, id: ins.id as string };
+    if (error) {
+      console.error("[server] database error:", error);
+      throw new Error("Something went wrong. Please try again.");
+    }
+    return { ok: true as const, id: ins.id };
   });
 
 export const deleteChapter = createServerFn({ method: "POST" })
@@ -192,7 +210,10 @@ export const deleteChapter = createServerFn({ method: "POST" })
     await authorize(data);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.from("chapters").delete().eq("id", data.id);
-    if (error) { console.error("[server] database error:", error); throw new Error("Something went wrong. Please try again."); }
+    if (error) {
+      console.error("[server] database error:", error);
+      throw new Error("Something went wrong. Please try again.");
+    }
     return { ok: true as const };
   });
 
@@ -225,7 +246,10 @@ export const setEventAttendance = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin
       .from("site_settings")
       .upsert({ key: "event_attendance", value: data.value, updated_at: new Date().toISOString() });
-    if (error) { console.error("[server] database error:", error); throw new Error("Something went wrong. Please try again."); }
+    if (error) {
+      console.error("[server] database error:", error);
+      throw new Error("Something went wrong. Please try again.");
+    }
     return { ok: true as const, value: data.value };
   });
 

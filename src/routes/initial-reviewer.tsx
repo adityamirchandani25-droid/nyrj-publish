@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   getInitialReviewerDesk,
   submitInitialReview,
-  validateInitialReviewerSignup,
+  createInitialReviewerAccount,
   type InitialReviewAssignment,
 } from "@/lib/initial-reviewer-portal.functions";
 
@@ -81,24 +81,17 @@ function ReviewerAuth() {
     const normalized = email.trim().toLowerCase();
     try {
       if (mode === "signup") {
-        const invite = await validateInitialReviewerSignup({
-          data: { email: normalized, accessCode },
+        const result = await createInitialReviewerAccount({
+          data: { email: normalized, password, accessCode },
         });
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email: normalized,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/initial-reviewer`,
-            data: { full_name: invite.name, requested_role: "initial_reviewer" },
-          },
-        });
-        if (signUpError) throw signUpError;
-        if (!data.session) {
-          setNotice("Check your inbox to confirm your email, then return here to sign in.");
-          setMode("login");
-          setPassword("");
-          setAccessCode("");
-        }
+        setNotice(
+          result.delivery === "password_setup"
+            ? "This email already has an NYRJ account. We emailed you a secure link to set its password and open your reviewer desk."
+            : "Check your inbox to confirm your email, then return here to sign in.",
+        );
+        setMode("login");
+        setPassword("");
+        setAccessCode("");
       } else {
         const { error: loginError } = await supabase.auth.signInWithPassword({
           email: normalized,
@@ -165,7 +158,7 @@ function Field({
         required
         type={type}
         value={value}
-        minLength={type === "password" ? 4 : undefined}
+        minLength={type === "password" ? 8 : undefined}
         onChange={(event) => onChange(event.target.value)}
         className={`${input} mt-1`}
       />

@@ -9,7 +9,6 @@ const errorMiddleware = createMiddleware().server(async ({ next, request }) => {
     return next();
   }
   try {
-
     return await next();
   } catch (error) {
     if (error != null && typeof error === "object" && "statusCode" in error) {

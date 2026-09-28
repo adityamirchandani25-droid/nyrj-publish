@@ -28,14 +28,11 @@ function recordSuccess(ip: string) {
   attempts.delete(ip);
 }
 
-
 export const staffLogin = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => LoginSchema.parse(d))
   .handler(async ({ data }) => {
     const ip =
-      getRequestIP({ xForwardedFor: true }) ??
-      getRequestHeader("cf-connecting-ip") ??
-      "unknown";
+      getRequestIP({ xForwardedFor: true }) ?? getRequestHeader("cf-connecting-ip") ?? "unknown";
     checkRateLimit(ip);
 
     const { checkStaffPassword, issueStaffToken } = await import("./staff-auth.server");

@@ -77,9 +77,11 @@ export function issueResetToken(reviewerId: string, currentHash: string): string
   return `${payload}.${sign(`reset:${payload}:${currentHash}`)}`;
 }
 
-export function verifyResetToken(
-  token: string | undefined | null,
-): { reviewerId: string; expiresAt: number; signature: string } {
+export function verifyResetToken(token: string | undefined | null): {
+  reviewerId: string;
+  expiresAt: number;
+  signature: string;
+} {
   if (!token || typeof token !== "string") throw new Error("This reset link is not valid.");
   const dot = token.lastIndexOf(".");
   if (dot <= 0) throw new Error("This reset link is not valid.");
@@ -121,90 +123,6 @@ export function verifyReviewerToken(token: string | undefined | null): string {
     throw new Error("Your reviewer session expired. Please sign in again.");
   }
   return reviewerId;
-}
-
-const MIME: Record<string, string> = {
-  pdf: "application/pdf",
-  doc: "application/msword",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  txt: "text/plain",
-  csv: "text/csv",
-  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  zip: "application/zip",
-};
-
-/**
- * Gathers the manuscript and supplementary files for a reviewer email:
- * attaches them (up to ~18 MB total) and always returns 30-day download links.
- * Consent forms are excluded — they contain participants' personal data.
- */
-export async function buildReviewerFiles(submissionId: string): Promise<{
-  attachments: { filename: string; content: string; type: string }[];
-  files: { filename: string; url: string; description: string }[];
-}> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data: sub } = await supabaseAdmin
-    .from("manuscript_submissions")
-    .select("manuscript_path, manuscript_filename, supplementary_paths")
-    .eq("id", submissionId)
-    .single();
-  const s = (sub ?? {}) as {
-    manuscript_path?: string;
-    manuscript_filename?: string;
-    supplementary_paths?: unknown;
-  };
-  const list: { path: string; filename: string; description: string }[] = [];
-  if (s.manuscript_path)
-    list.push({
-      path: s.manuscript_path,
-      filename: s.manuscript_filename || "manuscript",
-      description: "Manuscript",
-    });
-  if (Array.isArray(s.supplementary_paths)) {
-    for (const f of s.supplementary_paths as Array<{
-      path?: string;
-      filename?: string;
-      description?: string;
-    }>) {
-      if (f?.path)
-        list.push({
-          path: f.path,
-          filename: f.filename || "supplementary-file",
-          description: f.description || "Supplementary file",
-        });
-    }
-  }
-
-  const attachments: { filename: string; content: string; type: string }[] = [];
-  const files: { filename: string; url: string; description: string }[] = [];
-  let total = 0;
-  const LIMIT = 18 * 1024 * 1024;
-  for (const f of list) {
-    const { data: signed } = await supabaseAdmin.storage
-      .from("submissions")
-      .createSignedUrl(f.path, 60 * 60 * 24 * 30, { download: f.filename });
-    if (signed?.signedUrl)
-      files.push({ filename: f.filename, url: signed.signedUrl, description: f.description });
-    try {
-      const { data: blob } = await supabaseAdmin.storage.from("submissions").download(f.path);
-      if (!blob) continue;
-      const buf = Buffer.from(await blob.arrayBuffer());
-      if (total + buf.length > LIMIT) continue;
-      total += buf.length;
-      const ext = f.filename.split(".").pop()?.toLowerCase() ?? "";
-      attachments.push({
-        filename: f.filename,
-        content: buf.toString("base64"),
-        type: MIME[ext] || blob.type || "application/octet-stream",
-      });
-    } catch (e) {
-      console.error("[server] could not attach file:", e);
-    }
-  }
-  return { attachments, files };
 }
 
 export async function audit(

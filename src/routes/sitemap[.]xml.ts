@@ -56,15 +56,14 @@ export const Route = createFileRoute("/sitemap.xml")({
             ].join("\n"),
           );
 
-        const staticUrls = STATIC_PATHS.map(
-          (e) =>
-            [
-              "  <url>",
-              `    <loc>${BASE_URL}${e.path}</loc>`,
-              `    <changefreq>${e.changefreq}</changefreq>`,
-              `    <priority>${e.priority}</priority>`,
-              "  </url>",
-            ].join("\n"),
+        const staticUrls = STATIC_PATHS.map((e) =>
+          [
+            "  <url>",
+            `    <loc>${BASE_URL}${e.path}</loc>`,
+            `    <changefreq>${e.changefreq}</changefreq>`,
+            `    <priority>${e.priority}</priority>`,
+            "  </url>",
+          ].join("\n"),
         );
 
         const xml = [

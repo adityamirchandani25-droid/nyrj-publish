@@ -43,9 +43,9 @@ function Privacy() {
           </p>
 
           <p>
-            When you submit a manuscript, we use your information to communicate with you
-            throughout the editorial process, coordinate peer review, process revisions, notify you
-            of editorial decisions, and prepare accepted articles for publication.
+            When you submit a manuscript, we use your information to communicate with you throughout
+            the editorial process, coordinate peer review, process revisions, notify you of
+            editorial decisions, and prepare accepted articles for publication.
           </p>
 
           <p>
@@ -78,8 +78,8 @@ function Privacy() {
           </p>
 
           <p>
-            Your unpublished manuscript remains confidential throughout the editorial process. It
-            is shared only with authorized editors and assigned peer reviewers when necessary to
+            Your unpublished manuscript remains confidential throughout the editorial process. It is
+            shared only with authorized editors and assigned peer reviewers when necessary to
             evaluate your submission. We will never publish, distribute, or use your unpublished
             research without your permission, nor do we claim ownership of your intellectual
             property.
@@ -99,11 +99,10 @@ function Privacy() {
           </p>
 
           <p>
-            The National Youth Research Journal was founded on the principles of academic
-            integrity, transparency, and respect for every researcher. Whether you are submitting
-            your first manuscript or your tenth, we are committed to protecting your privacy,
-            respecting your intellectual property, and providing a safe and professional publishing
-            experience.
+            The National Youth Research Journal was founded on the principles of academic integrity,
+            transparency, and respect for every researcher. Whether you are submitting your first
+            manuscript or your tenth, we are committed to protecting your privacy, respecting your
+            intellectual property, and providing a safe and professional publishing experience.
           </p>
 
           <p>

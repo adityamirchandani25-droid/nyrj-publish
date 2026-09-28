@@ -3,34 +3,19 @@ import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
 import { getArticleBySlug, incrementCitation, type ArticleRow } from "@/lib/articles.functions";
+import { buildCitationBundle, splitAuthors, type CitationBundle } from "@/lib/citation-formats";
+import { generateArticleCitations } from "@/lib/citation-generator.functions";
 
 const SITE_URL = "https://nyrj.org";
 const JOURNAL_TITLE = "National Youth Research Journal (NYRJ)";
 
-function splitAuthors(authors: string): string[] {
-  return authors
-    .split(/\s*(?:,|;| and | & )\s*/i)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-/** Formats an APA-style journal reference citation. */
-function formatCitation(a: ArticleRow): string {
-  const year = (a.publication_date ?? a.added_at).slice(0, 4);
-  const authorList = splitAuthors(a.authors);
-  const apaAuthors = authorList
-    .map((full) => {
-      const parts = full.trim().split(/\s+/);
-      if (parts.length === 1) return parts[0];
-      const last = parts[parts.length - 1];
-      const initials = parts.slice(0, -1).map((p) => `${p[0]?.toUpperCase()}.`).join(" ");
-      return `${last}, ${initials}`;
-    })
-    .join(", ");
-  const issuePart = a.issue ? `, ${a.issue}` : "";
-  const doiPart = a.doi ? ` https://doi.org/${a.doi}` : ` ${SITE_URL}/article/${a.slug}`;
-  return `${apaAuthors} (${year}). ${a.title}. ${JOURNAL_TITLE}${issuePart}.${doiPart}`;
-}
+const CITATION_STYLES: Array<{ key: keyof CitationBundle; label: string }> = [
+  { key: "apa", label: "APA 7" },
+  { key: "mla", label: "MLA 9" },
+  { key: "chicago", label: "Chicago" },
+  { key: "bibtex", label: "BibTeX" },
+  { key: "ris", label: "RIS" },
+];
 
 const articleQuery = (slug: string) =>
   queryOptions({
@@ -124,7 +109,11 @@ export const Route = createFileRoute("/article/$slug")({
               ? { identifier: `https://doi.org/${a.doi}`, sameAs: `https://doi.org/${a.doi}` }
               : {}),
             ...(a.issue ? { issueNumber: a.issue } : {}),
-            encoding: { "@type": "MediaObject", contentUrl: pdfUrl, encodingFormat: "application/pdf" },
+            encoding: {
+              "@type": "MediaObject",
+              contentUrl: pdfUrl,
+              encodingFormat: "application/pdf",
+            },
             url,
           }),
         },
@@ -149,7 +138,9 @@ export const Route = createFileRoute("/article/$slug")({
     <SiteLayout>
       <section className="mx-auto max-w-3xl px-6 py-24 text-center">
         <h1 className="font-serif text-4xl text-primary">Something went wrong</h1>
-        <p className="mt-4 text-muted-foreground">{error.message}</p>
+        <p className="mt-4 text-muted-foreground">
+          {error instanceof Error ? error.message : "Please try again."}
+        </p>
       </section>
     </SiteLayout>
   ),
@@ -162,26 +153,61 @@ function ArticlePage() {
   const authors = splitAuthors(a.authors);
   const pubDate = (a.publication_date ?? a.added_at).slice(0, 10);
   const pdfHref = `/api/public/article/${a.slug}/pdf`;
-  const citation = formatCitation(a);
+  const apaPreview = buildCitationBundle(a).apa;
 
   const [copied, setCopied] = useState(false);
   const [count, setCount] = useState(a.citation_count ?? 0);
   const [showViewer, setShowViewer] = useState(false);
+  const [citations, setCitations] = useState<CitationBundle | null>(null);
+  const [citationStyle, setCitationStyle] = useState<keyof CitationBundle>("apa");
+  const [citationLoading, setCitationLoading] = useState(false);
+  const [citationError, setCitationError] = useState("");
 
-  async function handleCopy() {
+  async function recordCitationUse() {
     try {
-      await navigator.clipboard.writeText(citation);
+      const next = await incrementCitation({ data: { id: a.id } });
+      if (typeof next === "number") setCount(next);
+    } catch (err) {
+      console.error("citation count failed:", err);
+    }
+  }
+
+  async function handleCopy(value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      try {
-        const next = await incrementCitation({ data: { id: a.id } });
-        if (typeof next === "number") setCount(next);
-      } catch (err) {
-        console.error("citation count failed:", err);
-      }
+      await recordCitationUse();
     } catch {
       // Clipboard blocked
     }
+  }
+
+  async function handleGenerateCitations() {
+    setCitationLoading(true);
+    setCitationError("");
+    try {
+      const bundle = await generateArticleCitations({ data: { id: a.id } });
+      setCitations(bundle);
+    } catch (error) {
+      console.error("citation generation failed:", error);
+      setCitationError("Citations could not be generated right now. Please try again.");
+    } finally {
+      setCitationLoading(false);
+    }
+  }
+
+  function handleDownload(style: "bibtex" | "ris") {
+    if (!citations) return;
+    const extension = style === "bibtex" ? "bib" : "ris";
+    const blob = new Blob([citations[style]], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${a.slug}.${extension}`;
+    link.click();
+    URL.revokeObjectURL(url);
+    void recordCitationUse();
   }
 
   return (
@@ -240,7 +266,14 @@ function ArticlePage() {
             })}
           </p>
           <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-            <span>Published {new Date(pubDate).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}</span>
+            <span>
+              Published{" "}
+              {new Date(pubDate).toLocaleDateString(undefined, {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            </span>
             {a.issue && <span> · {a.issue}</span>}
             <span> · {JOURNAL_TITLE}</span>
           </p>
@@ -264,10 +297,12 @@ function ArticlePage() {
           </button>
           <button
             type="button"
-            onClick={handleCopy}
+            onClick={() =>
+              document.getElementById("cite-this-article")?.scrollIntoView({ behavior: "smooth" })
+            }
             className="inline-block px-5 py-2.5 border border-accent text-accent text-xs uppercase tracking-[0.2em] hover:bg-accent hover:text-accent-foreground transition"
           >
-            {copied ? "Copied!" : "Copy Citation"}
+            Cite This Article
           </button>
           <span className="self-center text-xs text-muted-foreground">
             Cited {count} {count === 1 ? "time" : "times"}
@@ -299,7 +334,9 @@ function ArticlePage() {
         {a.abstract && (
           <section className="mt-10">
             <h2 className="font-serif text-2xl text-primary">Abstract</h2>
-            <p className="mt-3 text-foreground/90 leading-relaxed whitespace-pre-wrap">{a.abstract}</p>
+            <p className="mt-3 text-foreground/90 leading-relaxed whitespace-pre-wrap">
+              {a.abstract}
+            </p>
           </section>
         )}
 
@@ -334,20 +371,117 @@ function ArticlePage() {
           </section>
         )}
 
-        <section className="mt-10 border-t-2 border-primary pt-6">
-          <h2 className="font-serif text-2xl text-primary">How to cite</h2>
-          <p className="mt-3 text-sm text-foreground/90 leading-relaxed">{citation}</p>
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="mt-3 text-xs uppercase tracking-[0.2em] text-accent hover:text-primary underline underline-offset-4"
-          >
-            {copied ? "Copied to clipboard ✓" : "Copy citation"}
-          </button>
+        <section
+          id="cite-this-article"
+          className="mt-10 scroll-mt-24 border-t-2 border-primary pt-6"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="font-serif text-2xl text-primary">Cite this article</h2>
+              <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+                Generate verified APA, MLA, Chicago, BibTeX, and RIS citations from this
+                article&apos;s published metadata.
+              </p>
+            </div>
+            {!citations && (
+              <button
+                type="button"
+                onClick={handleGenerateCitations}
+                disabled={citationLoading}
+                className="px-5 py-2.5 bg-primary text-primary-foreground text-xs uppercase tracking-[0.2em] transition hover:bg-accent disabled:cursor-wait disabled:opacity-60"
+              >
+                {citationLoading ? "Generating…" : "Generate Citations"}
+              </button>
+            )}
+          </div>
+
+          {citationError && (
+            <div
+              className="mt-4 border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+              role="alert"
+            >
+              {citationError}
+            </div>
+          )}
+
+          {!citations && !citationError && (
+            <div className="mt-5 border border-border bg-card p-4">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
+                APA preview
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-foreground/90">{apaPreview}</p>
+            </div>
+          )}
+
+          {citations && (
+            <div className="mt-5">
+              <div className="flex flex-wrap gap-2" role="tablist" aria-label="Citation format">
+                {CITATION_STYLES.map((style) => (
+                  <button
+                    key={style.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={citationStyle === style.key}
+                    onClick={() => {
+                      setCitationStyle(style.key);
+                      setCopied(false);
+                    }}
+                    className={`border px-3 py-2 text-[10px] uppercase tracking-[0.2em] transition ${
+                      citationStyle === style.key
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border text-foreground hover:border-accent hover:text-accent"
+                    }`}
+                  >
+                    {style.label}
+                  </button>
+                ))}
+              </div>
+
+              <div
+                className="mt-3 border border-border bg-card p-4"
+                role="tabpanel"
+                aria-label={`${CITATION_STYLES.find((style) => style.key === citationStyle)?.label} citation`}
+              >
+                {citationStyle === "bibtex" || citationStyle === "ris" ? (
+                  <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/90">
+                    {citations[citationStyle]}
+                  </pre>
+                ) : (
+                  <p className="text-sm leading-relaxed text-foreground/90">
+                    {citations[citationStyle]}
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => handleCopy(citations[citationStyle])}
+                  className="text-xs uppercase tracking-[0.2em] text-accent underline underline-offset-4 hover:text-primary"
+                >
+                  {copied ? "Copied to clipboard ✓" : "Copy citation"}
+                </button>
+                {(citationStyle === "bibtex" || citationStyle === "ris") && (
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(citationStyle)}
+                    className="text-xs uppercase tracking-[0.2em] text-accent underline underline-offset-4 hover:text-primary"
+                  >
+                    Download .{citationStyle === "bibtex" ? "bib" : "ris"}
+                  </button>
+                )}
+                <span className="text-xs text-muted-foreground">
+                  Checked against the article&apos;s published metadata.
+                </span>
+              </div>
+            </div>
+          )}
         </section>
 
         <p className="mt-12 text-xs text-muted-foreground">
-          <Link to="/archive" className="text-accent underline underline-offset-4">← Back to the Library</Link>
+          <Link to="/archive" className="text-accent underline underline-offset-4">
+            ← Back to the Library
+          </Link>
         </p>
       </article>
     </SiteLayout>

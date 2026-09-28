@@ -15,8 +15,15 @@ export const Route = createFileRoute("/guidance")({
   head: () => ({
     meta: [
       { title: "Guidance — NYRJ" },
-      { name: "description", content: "Get guidance and mentorship from the National Youth Research Journal advisors." },
-      { name: "keywords", content: "student research help, research mentorship for students, how to write a research paper, student research guidance, research advisors for students" },
+      {
+        name: "description",
+        content: "Get guidance and mentorship from the National Youth Research Journal advisors.",
+      },
+      {
+        name: "keywords",
+        content:
+          "student research help, research mentorship for students, how to write a research paper, student research guidance, research advisors for students",
+      },
     ],
   }),
   component: Guidance,
@@ -120,9 +127,7 @@ function StaffAddVideoForm({ onAdded }: { onAdded: () => void }) {
       >
         {mutation.isPending ? "Adding…" : "Add video"}
       </button>
-      {error && (
-        <p className="sm:col-span-3 text-xs text-destructive text-left">{error}</p>
-      )}
+      {error && <p className="sm:col-span-3 text-xs text-destructive text-left">{error}</p>}
     </form>
   );
 }
@@ -154,18 +159,25 @@ function Guidance() {
   return (
     <SiteLayout>
       <section className="mx-auto max-w-4xl px-6 py-16">
-        <p className="text-[10px] uppercase tracking-[0.35em] text-accent">GUIDANCE AND MENTORSHIP</p>
+        <p className="text-[10px] uppercase tracking-[0.35em] text-accent">
+          GUIDANCE AND MENTORSHIP
+        </p>
         <h1 className="font-serif text-4xl sm:text-5xl text-primary mt-3 leading-tight">
           GUIDANCE&nbsp;
         </h1>
         <p className="mt-4 text-muted-foreground max-w-2xl">
-          Need help with your research, manuscript, or submission? Our team is here for you. Reach out to the information team at NYRJINFO@Gmail.com. Whether it's help with formatting, author revisions, or even starting a project, we have you covered!
+          Need help with your research, manuscript, or submission? Our team is here for you. Reach
+          out to the information team at NYRJINFO@Gmail.com. Whether it's help with formatting,
+          author revisions, or even starting a project, we have you covered!
         </p>
 
         <div className="mt-10 border border-border bg-card p-6 sm:p-10 text-center">
           <p className="text-[10px] uppercase tracking-[0.25em] text-accent">Contact an Advisor</p>
           <p className="mt-3 text-sm text-foreground/85 max-w-lg mx-auto">
-            Our advisors are here to help assist you. Any questions, concerns or comments you would like to ask our advisors can be answered by contacting our support team. They can then share the advisors contact details for you to communicate with them. *Before calling view our advisory board to determine the advisor whom will best be able to assist you.
+            Our advisors are here to help assist you. Any questions, concerns or comments you would
+            like to ask our advisors can be answered by contacting our support team. They can then
+            share the advisors contact details for you to communicate with them. *Before calling
+            view our advisory board to determine the advisor whom will best be able to assist you.
           </p>
           <div className="mt-6">
             <Link
@@ -180,10 +192,13 @@ function Guidance() {
 
       <section className="mx-auto max-w-4xl px-6 pb-16">
         <div className="border border-border bg-card p-6 sm:p-10">
-          <p className="text-[10px] uppercase tracking-[0.25em] text-accent">VIDEO GUIDE AND ASSISTANCE</p>
+          <p className="text-[10px] uppercase tracking-[0.25em] text-accent">
+            VIDEO GUIDE AND ASSISTANCE
+          </p>
           <h3 className="font-serif text-2xl text-primary mt-2">Check Out our Videos!</h3>
           <p className="mt-3 text-sm text-muted-foreground">
-            A detailed walkthrough of the research and submission process can be viewed here. Email support for video suggestions!
+            A detailed walkthrough of the research and submission process can be viewed here. Email
+            support for video suggestions!
           </p>
 
           {videos.length === 0 ? (
@@ -203,7 +218,9 @@ function Guidance() {
           {staff && <StaffAddVideoForm onAdded={refresh} />}
           {deleteMutation.isError && (
             <p className="mt-3 text-xs text-destructive">
-              {deleteMutation.error instanceof Error ? deleteMutation.error.message : "Delete failed."}
+              {deleteMutation.error instanceof Error
+                ? deleteMutation.error.message
+                : "Delete failed."}
             </p>
           )}
         </div>

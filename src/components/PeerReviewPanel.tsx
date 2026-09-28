@@ -4,7 +4,7 @@ import {
   assignReviewer,
   listAssignments,
   listAuditLog,
-  resendReviewerFiles,
+  resendReviewerInvitation,
   sendEditsToAuthor,
   type AssignmentRow,
   type AuditRow,
@@ -17,7 +17,7 @@ const btnGhost =
   "px-3 py-1.5 border border-border text-[11px] uppercase tracking-[0.18em] hover:bg-muted disabled:opacity-50";
 const field = "mt-1 w-full border border-border bg-background px-3 py-2 text-sm";
 
-export function statusLabel(s: string) {
+function statusLabel(s: string) {
   switch (s) {
     case "invited":
       return "Invited — awaiting response";
@@ -69,7 +69,7 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
     setError(null);
     setNote(null);
     try {
-      await assignReviewer({
+      const result = await assignReviewer({
         data: {
           staffToken: staffToken(),
           submissionId,
@@ -80,7 +80,11 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
       });
       setEmail("");
       setName("");
-      setNote("Invitation email sent. The reviewer has 15 days from today.");
+      setNote(
+        result.emailSent
+          ? "Secure invitation sent. The reviewer must sign in with an approved account and has 15 days from today."
+          : "The assignment was created, but its invitation email failed. Check SendGrid, then use Resend secure invitation.",
+      );
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send the invitation.");
@@ -175,19 +179,19 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
                     setError(null);
                     setNote(null);
                     try {
-                      const r = await resendReviewerFiles({
+                      await resendReviewerInvitation({
                         data: { staffToken: staffToken(), assignmentId: a.id },
                       });
-                      setNote(`Sent ${r.count} file(s) to ${a.reviewer_email}.`);
+                      setNote(`Secure invitation resent to ${a.reviewer_email}.`);
                       await load();
                     } catch (err) {
-                      setError(err instanceof Error ? err.message : "Could not send files.");
+                      setError(err instanceof Error ? err.message : "Could not resend invitation.");
                     } finally {
                       setBusy(false);
                     }
                   }}
                 >
-                  Email files to reviewer
+                  Resend secure invitation
                 </button>
               )}
 
