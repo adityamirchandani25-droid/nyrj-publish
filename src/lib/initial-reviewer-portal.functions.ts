@@ -44,7 +44,7 @@ async function requireInitialReviewer(context: AuthContext) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
     .from("initial_reviewers")
-    .select("id, name, email, active, auth_user_id")
+    .select("id, name, email, portal_enabled, auth_user_id")
     .ilike("email", email)
     .maybeSingle();
 
@@ -53,11 +53,11 @@ async function requireInitialReviewer(context: AuthContext) {
     id: string;
     name: string;
     email: string;
-    active: boolean;
+    portal_enabled: boolean;
     auth_user_id: string | null;
   } | null;
-  if (!reviewer?.active) {
-    throw new Error("This email is not active in the initial reviewer rotation.");
+  if (!reviewer?.portal_enabled) {
+    throw new Error("This account does not have access to the initial reviewer portal.");
   }
   if (reviewer.auth_user_id && reviewer.auth_user_id !== context.userId) {
     throw new Error("This reviewer email is already linked to another account.");
@@ -108,7 +108,7 @@ export const createInitialReviewerAccount = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     if (!accessCodeMatches(data.accessCode)) {
-      throw new Error("The access code or invited email is not valid.");
+      throw new Error("The access code is not valid.");
     }
     const email = data.email.toLowerCase();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -116,7 +116,6 @@ export const createInitialReviewerAccount = createServerFn({ method: "POST" })
       .from("initial_reviewers")
       .select("id, name, email, auth_user_id")
       .ilike("email", email)
-      .eq("active", true)
       .maybeSingle();
     if (reviewerError) {
       console.error("[initial-reviewer] account lookup failed:", reviewerError);
@@ -128,7 +127,13 @@ export const createInitialReviewerAccount = createServerFn({ method: "POST" })
       email: string;
       auth_user_id: string | null;
     } | null;
-    if (!reviewer) throw new Error("The access code or invited email is not valid.");
+    const reviewerName =
+      reviewer?.name ||
+      email
+        .split("@", 1)[0]
+        .replace(/[._-]+/g, " ")
+        .replace(/\b\w/g, (letter) => letter.toUpperCase()) ||
+      "Reviewer";
 
     const siteUrl = (process.env.PUBLIC_SITE_URL || "https://nyrj.org").replace(/\/+$/, "");
     const redirectTo = `${siteUrl}/initial-reviewer`;
@@ -139,7 +144,7 @@ export const createInitialReviewerAccount = createServerFn({ method: "POST" })
     // over from the old client-side signup (in Auth but never linked to their
     // rotation row), get a magic link instead of being stranded.
     let passwordSet = false;
-    let link = reviewer.auth_user_id
+    let link = reviewer?.auth_user_id
       ? null
       : await admin.generateLink({
           type: "signup",
@@ -147,7 +152,7 @@ export const createInitialReviewerAccount = createServerFn({ method: "POST" })
           password: data.password,
           options: {
             redirectTo,
-            data: { full_name: reviewer.name, requested_role: "initial_reviewer" },
+            data: { full_name: reviewerName, requested_role: "initial_reviewer" },
           },
         });
     if (link?.data.user && link.data.properties?.action_link) {
@@ -162,7 +167,7 @@ export const createInitialReviewerAccount = createServerFn({ method: "POST" })
       console.error("[initial-reviewer] account link generation failed:", link.error);
       throw new Error(setupFailed);
     }
-    if (reviewer.auth_user_id && reviewer.auth_user_id !== user.id) {
+    if (reviewer?.auth_user_id && reviewer.auth_user_id !== user.id) {
       throw new Error("This reviewer email is already linked to another account.");
     }
 
@@ -197,10 +202,11 @@ export const createInitialReviewerAccount = createServerFn({ method: "POST" })
       actionLink = recoveryLink;
     }
 
-    if (!reviewer.auth_user_id) {
+    let reviewerId = reviewer?.id;
+    if (reviewer && !reviewer.auth_user_id) {
       const { data: bound, error: bindError } = await supabaseAdmin
         .from("initial_reviewers")
-        .update({ auth_user_id: user.id } as never)
+        .update({ auth_user_id: user.id, portal_enabled: true } as never)
         .eq("id", reviewer.id)
         .is("auth_user_id", null)
         .select("auth_user_id")
@@ -220,15 +226,41 @@ export const createInitialReviewerAccount = createServerFn({ method: "POST" })
           throw new Error("This reviewer email is already linked to another account.");
         }
       }
+    } else if (reviewer) {
+      const { error: accessError } = await supabaseAdmin
+        .from("initial_reviewers")
+        .update({ portal_enabled: true } as never)
+        .eq("id", reviewer.id);
+      if (accessError) {
+        console.error("[initial-reviewer] portal access update failed:", accessError);
+        throw new Error(setupFailed);
+      }
+    } else {
+      const { data: created, error: createError } = await supabaseAdmin
+        .from("initial_reviewers")
+        .insert({
+          name: reviewerName,
+          email,
+          active: false,
+          portal_enabled: true,
+          auth_user_id: user.id,
+        } as never)
+        .select("id")
+        .single();
+      if (createError || !created) {
+        console.error("[initial-reviewer] portal account creation failed:", createError);
+        throw new Error(setupFailed);
+      }
+      reviewerId = (created as { id: string }).id;
     }
 
     try {
       const { sendTemplateEmail } = await import("./email-templates/send-email");
       await sendTemplateEmail("initial-reviewer-account", email, {
-        idempotencyKey: `initial-reviewer-account-${reviewer.id}-${Date.now()}`,
+        idempotencyKey: `initial-reviewer-account-${reviewerId}-${Date.now()}`,
         replyTo: "NYRJINFO@gmail.com",
         templateData: {
-          reviewerName: reviewer.name,
+          reviewerName,
           actionUrl: actionLink,
           existingAccount,
         },

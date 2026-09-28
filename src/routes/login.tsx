@@ -218,8 +218,8 @@ function LoginPage() {
               </p>
               <h3 className="font-serif text-2xl text-primary mt-2">Initial Reviewer Login</h3>
               <p className="mt-2 text-sm text-muted-foreground">
-                For assigned initial reviewers. Sign in with the email address that received the
-                manuscript invitation.
+                Create an account with the reviewer access code, then sign in to view assigned
+                manuscripts.
               </p>
             </a>
             <a

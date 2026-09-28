@@ -105,6 +105,7 @@ export type Database = {
           email: string;
           id: string;
           name: string;
+          portal_enabled: boolean;
           password_hash: string;
           password_salt: string;
           status: string;
@@ -116,6 +117,7 @@ export type Database = {
           email: string;
           id?: string;
           name: string;
+          portal_enabled?: boolean;
           password_hash: string;
           password_salt: string;
           status?: string;
@@ -127,6 +129,7 @@ export type Database = {
           email?: string;
           id?: string;
           name?: string;
+          portal_enabled?: boolean;
           password_hash?: string;
           password_salt?: string;
           status?: string;

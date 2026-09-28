@@ -49,7 +49,7 @@ function InitialReviewerPage() {
         <p className={label}>Editorial Review</p>
         <h1 className="font-serif text-4xl sm:text-5xl text-primary mt-3">Initial Reviewer</h1>
         <p className="mt-3 max-w-2xl text-muted-foreground">
-          Sign in with the email address in your reviewer invitation to view assigned manuscripts
+          Create an account with the reviewer access code, or sign in to view assigned manuscripts
           and send recommendations to NYRJ staff.
         </p>
         {!ready ? (
@@ -174,7 +174,7 @@ function ReviewerAuth() {
               setNotice(null);
             }}
           >
-            {mode === "login" ? "Create invited account" : "Back to login"}
+            {mode === "login" ? "Create reviewer account" : "Back to login"}
           </button>
         </div>
       </form>

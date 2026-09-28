@@ -8,6 +8,7 @@ export type InitialReviewerRow = {
   name: string;
   email: string;
   active: boolean;
+  portal_enabled: boolean;
   assigned_count: number;
   created_at: string;
 };
@@ -20,7 +21,7 @@ export const listInitialReviewers = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows, error } = await supabaseAdmin
       .from("initial_reviewers")
-      .select("id, name, email, active, assigned_count, created_at")
+      .select("id, name, email, active, portal_enabled, assigned_count, created_at")
       .order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
     return (rows ?? []) as InitialReviewerRow[];

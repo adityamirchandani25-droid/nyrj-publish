@@ -129,7 +129,8 @@ export function InitialReviewers() {
               </p>
               <p className="text-[11px] text-muted-foreground">
                 {r.assigned_count} paper{r.assigned_count === 1 ? "" : "s"} ·{" "}
-                {r.active ? "Receiving papers" : "Paused"}
+                {r.active ? "Receiving papers" : "Paused"} ·{" "}
+                {r.portal_enabled ? "Portal account ready" : "Account not created"}
               </p>
             </div>
             <div className="flex gap-2">

@@ -56,8 +56,8 @@ export function InitialReviewerAccountEmail({
             {existingAccount ? "Set password securely" : "Confirm account"}
           </Button>
           <Text style={{ fontSize: "14px", color: "#555", margin: "20px 0 8px" }}>
-            This link is intended only for the invited reviewer. If you did not request it, you can
-            safely ignore this message.
+            This secure link is intended only for the person who requested the account. If that was
+            not you, you can safely ignore this message.
           </Text>
           <Text style={{ fontSize: "16px", margin: "20px 0 8px" }}>
             Thank you,
