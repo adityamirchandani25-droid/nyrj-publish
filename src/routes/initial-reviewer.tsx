@@ -73,16 +73,35 @@ function ReviewerAuth() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setBusy(true);
     setError(null);
     setNotice(null);
-    const normalized = email.trim().toLowerCase();
+    // Read from the form at submit time. Safari/password-manager autofill can
+    // update the visible field without reliably firing React's onChange.
+    const form = new FormData(event.currentTarget);
+    const normalized = String(form.get("email") ?? email)
+      .trim()
+      .toLowerCase();
+    const submittedPassword = String(form.get("password") ?? password);
+    const submittedAccessCode = String(form.get("accessCode") ?? accessCode);
+    if (mode === "signup" && submittedPassword.length < 8) {
+      setError("Use at least 8 characters for the password.");
+      return;
+    }
+    if (mode === "signup" && submittedAccessCode.length < 4) {
+      setError("Enter the 4-character access code.");
+      return;
+    }
+    setBusy(true);
     try {
       if (mode === "signup") {
         const result = await createInitialReviewerAccount({
-          data: { email: normalized, password, accessCode },
+          data: {
+            email: normalized,
+            password: submittedPassword,
+            accessCode: submittedAccessCode,
+          },
         });
         setNotice(
           result.delivery === "password_setup"
@@ -95,7 +114,7 @@ function ReviewerAuth() {
       } else {
         const { error: loginError } = await supabase.auth.signInWithPassword({
           email: normalized,
-          password,
+          password: submittedPassword,
         });
         if (loginError) throw loginError;
       }
@@ -112,21 +131,32 @@ function ReviewerAuth() {
         {mode === "login" ? "Initial Reviewer Login" : "Create Reviewer Account"}
       </p>
       <form onSubmit={submit} className="mt-5 space-y-4">
-        <Field label="Reviewer email" type="email" value={email} onChange={setEmail} />
         <Field
+          name="email"
+          label="Reviewer email"
+          type="email"
+          value={email}
+          onChange={setEmail}
+          autoComplete="email"
+        />
+        <Field
+          name="password"
           label="Password"
           type="password"
           value={password}
           onChange={setPassword}
           minLength={mode === "signup" ? 8 : 1}
+          autoComplete={mode === "signup" ? "new-password" : "current-password"}
         />
         {mode === "signup" && (
           <Field
+            name="accessCode"
             label="Access code"
             type="password"
             value={accessCode}
             onChange={setAccessCode}
             minLength={4}
+            autoComplete="one-time-code"
           />
         )}
         {error && <p className="text-sm text-destructive">{error}</p>}
@@ -153,26 +183,32 @@ function ReviewerAuth() {
 }
 
 function Field({
+  name,
   label: text,
   value,
   onChange,
   type = "text",
   minLength,
+  autoComplete,
 }: {
+  name: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
   minLength?: number;
+  autoComplete?: string;
 }) {
   return (
     <label className="block">
       <span className={label}>{text}</span>
       <input
         required
+        name={name}
         type={type}
         value={value}
         minLength={minLength}
+        autoComplete={autoComplete}
         onChange={(event) => onChange(event.target.value)}
         className={`${input} mt-1`}
       />

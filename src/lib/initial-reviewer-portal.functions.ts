@@ -91,15 +91,21 @@ function accessCodeMatches(candidate: string): boolean {
  * and staff retry controls as every other transactional message.
  */
 export const createInitialReviewerAccount = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) =>
-    z
+  .inputValidator((d: unknown) => {
+    const parsed = z
       .object({
-        email: z.string().trim().email().max(255),
+        email: z.string().trim().email("Enter a valid reviewer email.").max(255),
         password: z.string().min(8, "Use at least 8 characters.").max(200),
-        accessCode: z.string().min(4).max(128),
+        accessCode: z.string().min(4, "Enter the 4-character access code.").max(128),
       })
-      .parse(d),
-  )
+      .safeParse(d);
+    if (!parsed.success) {
+      throw new Error(
+        parsed.error.issues[0]?.message || "Check the account details and try again.",
+      );
+    }
+    return parsed.data;
+  })
   .handler(async ({ data }) => {
     if (!accessCodeMatches(data.accessCode)) {
       throw new Error("The access code or invited email is not valid.");
