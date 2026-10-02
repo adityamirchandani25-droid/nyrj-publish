@@ -6,12 +6,14 @@ export interface AuthorEditsProps {
   authorName?: string;
   title?: string;
   body?: string;
+  resubmitUrl?: string;
 }
 
 export function AuthorEditsEmail({
   authorName = "there",
   title = "your manuscript",
   body = "",
+  resubmitUrl = "https://nyrj.org/resubmit",
 }: AuthorEditsProps) {
   return (
     <Html>
@@ -31,9 +33,29 @@ export function AuthorEditsEmail({
           <Text style={{ fontSize: "15px", whiteSpace: "pre-wrap", margin: "16px 0" }}>{body}</Text>
           <Text style={{ fontSize: "16px", margin: "8px 0" }}>
             Whenever you are ready, we would be grateful to receive your revised manuscript within
-            the next two weeks so that we can prepare it for our library. If you need more time, or
-            if anything here is unclear, please just reply to this email — we are always happy to
-            help and to work around your schedule.
+            the next two weeks so that we can prepare it for our library. Upload it directly to your
+            existing submission here — there is no need to email the file or start a new submission:
+          </Text>
+          <Text style={{ fontSize: "16px", margin: "20px 0" }}>
+            <a
+              href={resubmitUrl}
+              style={{
+                backgroundColor: "#1a2b4c",
+                color: "#ffffff",
+                padding: "12px 20px",
+                textDecoration: "none",
+                borderRadius: "4px",
+              }}
+            >
+              Upload your revised manuscript
+            </a>
+          </Text>
+          <Text style={{ fontSize: "14px", color: "#555", margin: "8px 0" }}>
+            Or paste this link into your browser: {resubmitUrl}
+          </Text>
+          <Text style={{ fontSize: "16px", margin: "8px 0" }}>
+            If you need more time, or if anything here is unclear, please reply to this email — we
+            are always happy to help and to work around your schedule.
           </Text>
           <Text style={{ fontSize: "16px", margin: "8px 0" }}>
             Thank you for your thoughtful work and for trusting us with your research.
@@ -55,5 +77,6 @@ export const template = {
     authorName: "Jane",
     title: "Photocatalytic Degradation of Microplastics",
     body: "Please clarify the sampling procedure…",
+    resubmitUrl: "https://nyrj.org/resubmit?token=abc123",
   },
 } satisfies TemplateEntry;

@@ -23,45 +23,6 @@ export function SiteLayout({ children }: { children?: ReactNode }) {
   );
 }
 
-// Inaugural issue: July 2026. Issue increments each month, volume each July.
-function currentIssueInfo() {
-  const now = new Date();
-  const launch = new Date(2026, 6, 1); // July 2026
-  const months = Math.max(
-    0,
-    (now.getFullYear() - launch.getFullYear()) * 12 + (now.getMonth() - launch.getMonth()),
-  );
-  const issue = (months % 12) + 1;
-  const volNum = Math.floor(months / 12) + 1;
-  return { volume: toRoman(volNum), issue, year: now.getFullYear() };
-}
-
-function toRoman(n: number): string {
-  const map: Array<[number, string]> = [
-    [1000, "M"],
-    [900, "CM"],
-    [500, "D"],
-    [400, "CD"],
-    [100, "C"],
-    [90, "XC"],
-    [50, "L"],
-    [40, "XL"],
-    [10, "X"],
-    [9, "IX"],
-    [5, "V"],
-    [4, "IV"],
-    [1, "I"],
-  ];
-  let out = "";
-  for (const [v, s] of map) {
-    while (n >= v) {
-      out += s;
-      n -= v;
-    }
-  }
-  return out;
-}
-
 function Header() {
   const [session, setSession] = useState<Session | null>(null);
   const navigate = useNavigate();
@@ -71,8 +32,6 @@ function Header() {
     setSession(getSession());
     return onAuthChange(setSession);
   }, []);
-
-  const { volume, issue, year } = currentIssueInfo();
 
   function handleSearch(e: FormEvent) {
     e.preventDefault();
@@ -84,10 +43,7 @@ function Header() {
   return (
     <header className="border-b border-border bg-background">
       <div className="border-b border-border/60">
-        <div className="mx-auto max-w-6xl px-6 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground flex justify-between items-center gap-4">
-          <span>
-            Vol. {volume} · Issue {issue} · {year}
-          </span>
+        <div className="mx-auto max-w-6xl px-6 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground flex justify-end items-center gap-4">
           <div className="flex items-center gap-4 sm:gap-6">
             <span className="hidden md:inline">ISSN 3143-3030</span>
             <ThemeToggle />

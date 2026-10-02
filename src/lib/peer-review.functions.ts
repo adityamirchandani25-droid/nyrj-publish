@@ -263,6 +263,7 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
     const { verifyStaffToken } = await import("./staff-auth.server");
     verifyStaffToken(data.staffToken);
     const { audit } = await import("./peer-review.server");
+    const { newResubmitToken } = await import("./editor-auth.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: a, error } = await supabaseAdmin
@@ -273,17 +274,29 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
     if (error || !a) throw new Error("Assignment not found.");
     const submissionId = (a as { submission_id: string }).submission_id;
 
-    const { data: sub } = await supabaseAdmin
+    const { data: sub, error: submissionError } = await supabaseAdmin
       .from("manuscript_submissions")
-      .select("title, submitter_email, authors")
+      .select("title, submitter_email, authors, resubmit_token")
       .eq("id", submissionId)
       .single();
+    if (submissionError || !sub) throw new Error("Submission not found.");
     const s = (sub ?? {}) as {
       title?: string;
       submitter_email?: string;
       authors?: Array<{ name?: string }>;
+      resubmit_token?: string | null;
     };
     if (!s.submitter_email) throw new Error("No author email on this submission.");
+
+    const resubmitToken = s.resubmit_token ?? newResubmitToken();
+    if (!s.resubmit_token) {
+      const { error: tokenError } = await supabaseAdmin
+        .from("manuscript_submissions")
+        .update({ resubmit_token: resubmitToken } as never)
+        .eq("id", submissionId);
+      if (tokenError) throw new Error("Could not create the author's resubmission link.");
+    }
+    const resubmitUrl = `${SITE_URL}/resubmit?token=${resubmitToken}`;
 
     const { sendTemplateEmail } = await import("./email-templates/send-email");
     await sendTemplateEmail("author-edits", s.submitter_email, {
@@ -293,6 +306,7 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
         authorName: Array.isArray(s.authors) ? (s.authors[0]?.name ?? "there") : "there",
         title: s.title ?? "your manuscript",
         body: data.body,
+        resubmitUrl,
       },
     });
 

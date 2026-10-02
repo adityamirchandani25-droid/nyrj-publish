@@ -24,8 +24,8 @@ const ACTION_LABEL: Record<string, string> = {
 export function EditorAdmin() {
   return (
     <div className="mt-8 space-y-12">
-      <EditorRecommendations />
       <EditorAccounts />
+      <EditorRecommendations />
     </div>
   );
 }
@@ -46,6 +46,15 @@ function EditorAccounts() {
 
   useEffect(() => {
     void load();
+    const refresh = () => void load();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, 30_000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+    };
   }, []);
 
   async function decide(id: string, status: "approved" | "rejected") {
@@ -63,10 +72,53 @@ function EditorAccounts() {
     }
   }
 
+  const pending = (rows ?? []).filter((row) => row.status === "pending");
+  const handled = (rows ?? []).filter((row) => row.status !== "pending");
+
+  function accountRow(r: EditorAccountRow) {
+    return (
+      <div
+        key={r.id}
+        className={`border bg-card p-4 flex flex-wrap items-center gap-3 ${
+          r.status === "pending" ? "border-accent/60" : "border-border"
+        }`}
+      >
+        <div className="flex-1 min-w-[220px]">
+          <p className="font-serif text-lg text-primary">{r.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {r.email} · username {r.username} · requested{" "}
+            {new Date(r.created_at).toLocaleDateString()}
+          </p>
+        </div>
+        <span className={heading}>{r.status}</span>
+        {r.status !== "approved" && (
+          <button
+            className={btn}
+            disabled={busy === r.id}
+            onClick={() => void decide(r.id, "approved")}
+          >
+            Approve
+          </button>
+        )}
+        {r.status !== "rejected" && (
+          <button
+            className={btnGhost}
+            disabled={busy === r.id}
+            onClick={() => void decide(r.id, "rejected")}
+          >
+            {r.status === "approved" ? "Revoke" : "Decline"}
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <section>
       <div className="flex items-center justify-between">
-        <h3 className="font-serif text-2xl text-primary">Editor accounts</h3>
+        <h3 className="font-serif text-2xl text-primary">
+          Editor account requests {rows ? `(${pending.length} pending)` : ""}
+        </h3>
         <button className={btnGhost} onClick={() => void load()}>
           Refresh
         </button>
@@ -79,40 +131,13 @@ function EditorAccounts() {
       {rows && rows.length === 0 && (
         <p className="mt-4 text-sm text-muted-foreground">No editors have signed up yet.</p>
       )}
-      <div className="mt-4 space-y-3">
-        {(rows ?? []).map((r) => (
-          <div
-            key={r.id}
-            className="border border-border bg-card p-4 flex flex-wrap items-center gap-3"
-          >
-            <div className="flex-1 min-w-[220px]">
-              <p className="font-serif text-lg text-primary">{r.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {r.email} · username {r.username}
-              </p>
-            </div>
-            <span className={heading}>{r.status}</span>
-            {r.status !== "approved" && (
-              <button
-                className={btn}
-                disabled={busy === r.id}
-                onClick={() => void decide(r.id, "approved")}
-              >
-                Approve
-              </button>
-            )}
-            {r.status !== "rejected" && (
-              <button
-                className={btnGhost}
-                disabled={busy === r.id}
-                onClick={() => void decide(r.id, "rejected")}
-              >
-                {r.status === "approved" ? "Revoke" : "Decline"}
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
+      <div className="mt-4 space-y-3">{pending.map(accountRow)}</div>
+      {handled.length > 0 && (
+        <div className="mt-8">
+          <p className={heading}>Approved and declined accounts</p>
+          <div className="mt-3 space-y-3">{handled.map(accountRow)}</div>
+        </div>
+      )}
     </section>
   );
 }
