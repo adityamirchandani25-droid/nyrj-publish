@@ -4,9 +4,10 @@
 // author until staff approve the recommendation.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { MASTER_STAFF_EMAILS } from "./staff-recipients";
 
 const SITE_URL = "https://nyrj.org";
-const STAFF_RECIPIENTS = ["keyaanmerchant24@gmail.com", "Madhavarora529@gmail.com"];
+const STAFF_RECIPIENTS = MASTER_STAFF_EMAILS;
 
 const StaffSchema = z.object({ staffToken: z.string().min(1) });
 const EditorSchema = z.object({ editorToken: z.string().min(1) });
@@ -80,6 +81,8 @@ export const registerEditor = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({ scope: "editor-register", limit: 3, windowSeconds: 60 * 60 });
     const { hashPassword, newSalt, audit } = await import("./peer-review.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const salt = newSalt();
@@ -107,6 +110,8 @@ export const editorLogin = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({ scope: "editor-login", limit: 8, windowSeconds: 10 * 60 });
     const { verifyPassword } = await import("./peer-review.server");
     const { issueEditorToken } = await import("./editor-auth.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -407,11 +412,18 @@ export const resolveRecommendation = createServerFn({ method: "POST" })
     let emailed = false;
     if (rec.action === "formatting") {
       const token = sub.resubmit_token ?? newResubmitToken();
-      if (!sub.resubmit_token) {
-        await supabaseAdmin
-          .from("manuscript_submissions")
-          .update({ resubmit_token: token } as never)
-          .eq("id", rec.submission_id);
+      // Open the revision window before mail is sent so its link is immediately
+      // usable. This updates the existing paper; it never inserts a submission.
+      const { data: revisionState, error: revisionStateError } = await supabaseAdmin
+        .from("manuscript_submissions")
+        .update({ resubmit_token: token, status: "waiting for edits" } as never)
+        .eq("id", rec.submission_id)
+        .eq("decision", "pending")
+        .is("deleted_at", null)
+        .select("id")
+        .maybeSingle();
+      if (revisionStateError || !revisionState) {
+        throw new Error("This paper is no longer open for revisions.");
       }
       const resubmitUrl = `${SITE_URL}/resubmit?token=${token}`;
       try {
@@ -425,10 +437,12 @@ export const resolveRecommendation = createServerFn({ method: "POST" })
       } catch (err) {
         console.error("[server] author revision email failed:", err);
       }
-      await supabaseAdmin
-        .from("manuscript_submissions")
-        .update({ status: "waiting for edits" } as never)
-        .eq("id", rec.submission_id);
+      try {
+        const { updateSubmissionRow } = await import("./excel-sync.server");
+        await updateSubmissionRow(rec.submission_id, { status: "waiting for edits" });
+      } catch (syncError) {
+        console.error("[server] revision-request workbook sync failed:", syncError);
+      }
     } else {
       const decision = rec.action === "accept" ? "accepted" : "declined";
       await supabaseAdmin
@@ -500,7 +514,9 @@ async function submissionForToken(token: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data } = await supabaseAdmin
     .from("manuscript_submissions")
-    .select("id, title, submitter_email, current_version, status, authors")
+    .select(
+      "id, title, submitter_email, current_version, status, decision, authors, manuscript_path, manuscript_filename",
+    )
     .eq("resubmit_token", token)
     .is("deleted_at", null)
     .maybeSingle();
@@ -510,15 +526,31 @@ async function submissionForToken(token: string) {
     submitter_email: string;
     current_version: number;
     status: string;
+    decision: string;
     authors: Array<{ name?: string }> | null;
+    manuscript_path: string | null;
+    manuscript_filename: string | null;
   } | null;
   if (!row) throw new Error("This upload link is no longer valid. Please reply to our email.");
+  if (row.decision !== "pending" || row.status !== "waiting for edits") {
+    throw new Error(
+      "This revision link is not currently active. Please use the newest link from our editors.",
+    );
+  }
   return row;
+}
+
+function requirePdfFilename(filename: string) {
+  if (!filename.toLowerCase().endsWith(".pdf")) {
+    throw new Error("Please upload the revised manuscript as a PDF file.");
+  }
 }
 
 export const getResubmitInfo = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ResubmitToken.parse(d))
   .handler(async ({ data }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({ scope: "revision-info", limit: 30, windowSeconds: 10 * 60 });
     const row = await submissionForToken(data.token);
     return { title: row.title, version: row.current_version, status: row.status };
   });
@@ -529,7 +561,10 @@ export const createRevisionUpload = createServerFn({ method: "POST" })
     ResubmitToken.extend({ filename: z.string().trim().min(1).max(260) }).parse(d),
   )
   .handler(async ({ data }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({ scope: "revision-upload", limit: 10, windowSeconds: 60 * 60 });
     const row = await submissionForToken(data.token);
+    requirePdfFilename(data.filename);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const safe = data.filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120);
     const path = `revisions/${row.id}/v${row.current_version + 1}-${Date.now()}-${safe}`;
@@ -537,7 +572,12 @@ export const createRevisionUpload = createServerFn({ method: "POST" })
       .from("submissions")
       .createSignedUploadUrl(path);
     if (error || !signed) throw new Error(error?.message ?? "Could not prepare the upload.");
-    return { path, token: signed.token, signedUrl: signed.signedUrl };
+    return {
+      path,
+      token: signed.token,
+      signedUrl: signed.signedUrl,
+      expectedVersion: row.current_version,
+    };
   });
 
 export const finalizeRevision = createServerFn({ method: "POST" })
@@ -545,15 +585,55 @@ export const finalizeRevision = createServerFn({ method: "POST" })
     ResubmitToken.extend({
       path: z.string().trim().min(1).max(500),
       filename: z.string().trim().min(1).max(260),
+      expectedVersion: z.number().int().min(1),
       note: z.string().trim().max(5000).optional().default(""),
     }).parse(d),
   )
   .handler(async ({ data }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({ scope: "revision-finalize", limit: 10, windowSeconds: 60 * 60 });
     const row = await submissionForToken(data.token);
+    requirePdfFilename(data.filename);
+    if (row.current_version !== data.expectedVersion) {
+      throw new Error("A newer revision was already received. Please refresh before trying again.");
+    }
     const { audit } = await import("./peer-review.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const nextVersion = (row.current_version ?? 1) + 1;
+    const nextVersion = data.expectedVersion + 1;
+    const folder = `revisions/${row.id}`;
+    const expectedPrefix = `${folder}/v${nextVersion}-`;
+    if (!data.path.startsWith(expectedPrefix) || data.path.includes("..")) {
+      throw new Error("That upload does not belong to this revision request.");
+    }
+
+    // A caller cannot finalize a guessed or missing storage path. The exact
+    // object must have been uploaded under this paper's revision directory.
+    const objectName = data.path.slice(folder.length + 1);
+    const { data: storedObjects, error: objectError } = await supabaseAdmin.storage
+      .from("submissions")
+      .list(folder, { search: objectName, limit: 10 });
+    const stored = storedObjects?.find((object) => object.name === objectName);
+    if (objectError || !stored)
+      throw new Error("The PDF upload was not completed. Please try again.");
+
+    // Preserve the file that was current before replacing the pointer. On the
+    // first revision this records v1; later revisions are already represented.
+    if (row.manuscript_path && row.manuscript_filename) {
+      const { error: snapshotError } = await supabaseAdmin.from("manuscript_versions").upsert(
+        {
+          submission_id: row.id,
+          version: data.expectedVersion,
+          manuscript_path: row.manuscript_path,
+          manuscript_filename: row.manuscript_filename,
+          label: data.expectedVersion === 1 ? "Original submission" : "Previous revision",
+          note: "",
+        } as never,
+        { onConflict: "submission_id,version", ignoreDuplicates: true },
+      );
+      if (snapshotError) throw new Error(snapshotError.message);
+    }
+
     const { error } = await supabaseAdmin.from("manuscript_versions").insert({
       submission_id: row.id,
       version: nextVersion,
@@ -562,17 +642,45 @@ export const finalizeRevision = createServerFn({ method: "POST" })
       label: "After edits",
       note: data.note,
     } as never);
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (error.code === "23505") {
+        throw new Error("This revision was already received. Please refresh the page.");
+      }
+      throw new Error(error.message);
+    }
 
-    await supabaseAdmin
+    const { data: updated, error: updateError } = await supabaseAdmin
       .from("manuscript_submissions")
       .update({
         manuscript_path: data.path,
         manuscript_filename: data.filename,
         current_version: nextVersion,
         status: "secondary review",
+        resubmit_token: null,
       } as never)
-      .eq("id", row.id);
+      .eq("id", row.id)
+      .eq("current_version", data.expectedVersion)
+      .eq("status", "waiting for edits")
+      .eq("decision", "pending")
+      .eq("resubmit_token", data.token)
+      .select("id")
+      .maybeSingle();
+    if (updateError || !updated) {
+      await supabaseAdmin
+        .from("manuscript_versions")
+        .delete()
+        .eq("submission_id", row.id)
+        .eq("version", nextVersion)
+        .eq("manuscript_path", data.path);
+      throw new Error("A newer revision was already received. Please refresh before trying again.");
+    }
+
+    try {
+      const { updateSubmissionRow } = await import("./excel-sync.server");
+      await updateSubmissionRow(row.id, { status: "secondary review" });
+    } catch (syncError) {
+      console.error("[server] revision workbook sync failed:", syncError);
+    }
 
     try {
       const { sendTemplateEmail, sendTemplateEmailToMany } =

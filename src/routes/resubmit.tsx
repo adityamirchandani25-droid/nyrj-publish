@@ -51,6 +51,10 @@ function ResubmitPage() {
       setError("Please choose your revised file first.");
       return;
     }
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setError("Please choose a PDF file for the revised manuscript.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -60,7 +64,13 @@ function ResubmitPage() {
         .uploadToSignedUrl(signed.path, signed.token, file);
       if (upErr) throw new Error(upErr.message);
       const res = await finalizeRevision({
-        data: { token, path: signed.path, filename: file.name, note },
+        data: {
+          token,
+          path: signed.path,
+          filename: file.name,
+          expectedVersion: signed.expectedVersion,
+          note,
+        },
       });
       setDone(res.version);
     } catch (e) {
@@ -94,14 +104,15 @@ function ResubmitPage() {
               </p>
             </div>
             <p className="text-sm text-muted-foreground">
-              This attaches straight to your existing submission — there's no need to start a new
-              one. Thank you for taking the time to revise your work.
+              Your title, authors, abstract, declarations, reviewer assignment, and all other
+              submission details are already saved. This replaces only the current manuscript PDF on
+              the same paper — it does not create a new submission or assign a new initial reviewer.
             </p>
             <div>
               <p className="text-[10px] uppercase tracking-[0.25em] text-accent">Revised file</p>
               <input
                 type="file"
-                accept=".pdf,.doc,.docx"
+                accept=".pdf,application/pdf"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 className="mt-1 w-full border border-border bg-background px-3 py-2 text-sm"
               />

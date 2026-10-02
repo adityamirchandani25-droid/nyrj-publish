@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
-import { submitManuscript } from "@/lib/manuscript-submissions.functions";
+import { createSubmissionUpload, submitManuscript } from "@/lib/manuscript-submissions.functions";
 import { useServerFn } from "@tanstack/react-start";
 
 export const Route = createFileRoute("/submit/apply")({
@@ -73,6 +73,7 @@ const RESEARCH_TYPES = [
 function SubmitApply() {
   const navigate = useNavigate();
   const submitFn = useServerFn(submitManuscript);
+  const createUploadFn = useServerFn(createSubmissionUpload);
 
   const [step, setStep] = useState(1);
   const [userId, setUserId] = useState<string | null>(null);
@@ -196,14 +197,17 @@ function SubmitApply() {
   ]);
 
   async function uploadFile(file: File, uid: string) {
-    const safe = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 120);
-    const path = `${uid}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${safe}`;
-    const { error } = await supabase.storage.from("submissions").upload(path, file, {
-      upsert: false,
-      contentType: file.type || "application/octet-stream",
+    if (!uid) throw new Error("Please sign in again before uploading.");
+    const signed = await createUploadFn({
+      data: { filename: file.name, size: file.size },
     });
+    const { error } = await supabase.storage
+      .from("submissions")
+      .uploadToSignedUrl(signed.path, signed.token, file, {
+        contentType: file.type || "application/octet-stream",
+      });
     if (error) throw new Error(`Upload failed: ${error.message}`);
-    return { path, filename: file.name };
+    return { path: signed.path, filename: file.name };
   }
 
   async function handleSubmit() {

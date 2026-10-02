@@ -50,6 +50,27 @@
       "when": 1790179332527,
       "tag": "0006_add_referral_code_to_submissions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790946000000,
+      "tag": "0007_revision_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790949600000,
+      "tag": "0008_peer_review_deadlines",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790953200000,
+      "tag": "0009_api_rate_limits",
+      "breakpoints": true
     }
   ]
 }

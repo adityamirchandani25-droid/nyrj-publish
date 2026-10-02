@@ -57,6 +57,7 @@ function AdminSubmissions() {
   const [reviewFor, setReviewFor] = useState<string | null>(null);
   const [libraryFor, setLibraryFor] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(false);
+  const [reviewerRefreshKey, setReviewerRefreshKey] = useState(0);
 
   useEffect(() => {
     setSession(getSession());
@@ -108,6 +109,7 @@ function AdminSubmissions() {
         data: { staffToken: staffToken(), id, ...patch },
       });
       setRows((cur) => cur?.map((r) => (r.id === id ? { ...r, ...patch } : r)) ?? cur);
+      if (patch.decision) setReviewerRefreshKey((value) => value + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Update failed.");
     } finally {
@@ -569,7 +571,7 @@ function AdminSubmissions() {
           </div>
         )}
 
-        {tab === "active" && <InitialReviewers />}
+        {tab === "active" && <InitialReviewers refreshKey={reviewerRefreshKey} />}
       </section>
     </SiteLayout>
   );

@@ -2,8 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { MASTER_STAFF_EMAILS } from "./staff-recipients";
 
-const STAFF_RECIPIENTS = ["keyaanmerchant24@gmail.com", "Madhavarora529@gmail.com"];
+const STAFF_RECIPIENTS = MASTER_STAFF_EMAILS;
 
 export type InitialReviewAssignment = {
   id: string;
@@ -121,6 +122,18 @@ export const createInitialReviewerAccount = createServerFn({ method: "POST" })
     return parsed.data;
   })
   .handler(async ({ data }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({
+      scope: "initial-reviewer-account-ip",
+      limit: 5,
+      windowSeconds: 10 * 60,
+    });
+    await enforceRateLimit({
+      scope: "initial-reviewer-account-email",
+      limit: 3,
+      windowSeconds: 60 * 60,
+      identity: data.email.toLowerCase(),
+    });
     if (!accessCodeMatches(data.accessCode)) {
       throw new Error("The access code is not valid.");
     }
@@ -396,7 +409,7 @@ export const submitInitialReview = createServerFn({ method: "POST" })
     z
       .object({
         submissionId: z.string().uuid(),
-        action: z.enum(["accept", "decline"]),
+        action: z.enum(["accept", "formatting", "decline"]),
         comments: z.string().trim().min(1, "Please add comments for the author.").max(20000),
       })
       .parse(d),
@@ -406,13 +419,14 @@ export const submitInitialReview = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: submission } = await supabaseAdmin
       .from("manuscript_submissions")
-      .select("id, title, decision, initial_reviewer_email")
+      .select("id, title, status, decision, initial_reviewer_email")
       .eq("id", data.submissionId)
       .is("deleted_at", null)
       .maybeSingle();
     const row = submission as {
       id: string;
       title: string;
+      status: string;
       decision: string;
       initial_reviewer_email: string;
     } | null;
@@ -422,6 +436,9 @@ export const submitInitialReview = createServerFn({ method: "POST" })
     }
     if (row.decision !== "pending")
       throw new Error("This manuscript already has a final decision.");
+    if (row.status === "waiting for edits") {
+      throw new Error("This manuscript is waiting for the author's revised PDF.");
+    }
 
     const { data: pending } = await supabaseAdmin
       .from("editor_recommendations")

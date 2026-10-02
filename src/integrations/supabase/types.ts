@@ -8,6 +8,27 @@ export type Database = {
   };
   public: {
     Tables: {
+      api_rate_limits: {
+        Row: {
+          bucket: string;
+          request_count: number;
+          updated_at: string;
+          window_started_at: string;
+        };
+        Insert: {
+          bucket: string;
+          request_count?: number;
+          updated_at?: string;
+          window_started_at?: string;
+        };
+        Update: {
+          bucket?: string;
+          request_count?: number;
+          updated_at?: string;
+          window_started_at?: string;
+        };
+        Relationships: [];
+      };
       advisors: {
         Row: {
           affiliation: string | null;
@@ -676,6 +697,7 @@ export type Database = {
           id: string;
           invite_reminder_sent_at: string | null;
           invite_token: string;
+          no_response_notified_at: string | null;
           responded_at: string | null;
           review_comments: string;
           review_reminder_sent_at: string | null;
@@ -694,6 +716,7 @@ export type Database = {
           id?: string;
           invite_reminder_sent_at?: string | null;
           invite_token: string;
+          no_response_notified_at?: string | null;
           responded_at?: string | null;
           review_comments?: string;
           review_reminder_sent_at?: string | null;
@@ -712,6 +735,7 @@ export type Database = {
           id?: string;
           invite_reminder_sent_at?: string | null;
           invite_token?: string;
+          no_response_notified_at?: string | null;
           responded_at?: string | null;
           review_comments?: string;
           review_reminder_sent_at?: string | null;
@@ -929,6 +953,19 @@ export type Database = {
     Functions: {
       consume_ai_chat_quota: {
         Args: { p_identity_hash: string };
+        Returns: {
+          allowed: boolean;
+          remaining: number;
+          retry_after_seconds: number;
+        }[];
+      };
+      consume_api_rate_limit: {
+        Args: {
+          p_identity_hash: string;
+          p_limit: number;
+          p_scope: string;
+          p_window_seconds: number;
+        };
         Returns: {
           allowed: boolean;
           remaining: number;

@@ -18,7 +18,7 @@ const btnGhost =
 const ACTION_LABEL: Record<string, string> = {
   accept: "Recommends accepting",
   decline: "Recommends declining",
-  formatting: "Formatting changes for the author",
+  formatting: "Requests revisions from the author",
 };
 
 export function EditorAdmin() {

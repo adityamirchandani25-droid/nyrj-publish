@@ -55,6 +55,13 @@ export const eventIdeaSubmit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => IdeaSchema.parse(d))
   .handler(async ({ data, context }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({
+      scope: "event-idea",
+      limit: 5,
+      windowSeconds: 24 * 60 * 60,
+      identity: context.userId,
+    });
     const email = (context.claims?.email as string | undefined)?.toLowerCase();
     if (!email) throw new Error("Your account has no email on file.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -98,6 +105,13 @@ export const eventExtractFromPoster = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { verifyStaffToken } = await import("./staff-auth.server");
     verifyStaffToken(data.staffToken);
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({
+      scope: "event-poster-ai",
+      limit: 30,
+      windowSeconds: 60 * 60,
+      identity: data.staffToken,
+    });
 
     const { getAiGatewayConfig } = await import("./ai-gateway.server");
     const ai = getAiGatewayConfig();

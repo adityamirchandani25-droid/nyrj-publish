@@ -10,6 +10,7 @@ import { template as authorEditsTemplate } from "./author-edits";
 import { template as reviewerAccountApprovedTemplate } from "./reviewer-account-approved";
 import { template as reviewerResponseTemplate } from "./reviewer-response";
 import { template as reviewerReminderTemplate } from "./reviewer-reminder";
+import { template as reviewerNoResponseTemplate } from "./reviewer-no-response";
 import { template as reviewThankYouTemplate } from "./review-thank-you";
 import { template as initialReviewAssignmentTemplate } from "./initial-review-assignment";
 import { template as initialReviewerAccountTemplate } from "./initial-reviewer-account";
@@ -47,6 +48,7 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   "reviewer-account-approved": reviewerAccountApprovedTemplate,
   "reviewer-response": reviewerResponseTemplate,
   "reviewer-reminder": reviewerReminderTemplate,
+  "reviewer-no-response": reviewerNoResponseTemplate,
   "review-thank-you": reviewThankYouTemplate,
   "initial-review-assignment": initialReviewAssignmentTemplate,
   "initial-reviewer-account": initialReviewerAccountTemplate,

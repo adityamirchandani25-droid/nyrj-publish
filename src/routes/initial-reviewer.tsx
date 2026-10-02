@@ -312,13 +312,14 @@ function AssignmentCard({
   assignment: InitialReviewAssignment;
   onSubmitted: () => Promise<void>;
 }) {
-  const [action, setAction] = useState<"accept" | "decline">("accept");
+  const [action, setAction] = useState<"accept" | "formatting" | "decline">("accept");
   const [comments, setComments] = useState("");
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pending = assignment.recommendation?.status === "pending";
   const closed = assignment.decision !== "pending";
+  const waitingForRevision = assignment.status === "waiting for edits";
 
   async function submit() {
     setBusy(true);
@@ -379,7 +380,7 @@ function AssignmentCard({
         </div>
       )}
 
-      {!closed && !pending && (
+      {!closed && !pending && !waitingForRevision && (
         <div className="mt-5">
           <button className={primaryButton} onClick={() => setOpen((value) => !value)}>
             {open ? "Close Review" : "Review Manuscript"}
@@ -391,23 +392,29 @@ function AssignmentCard({
           Your review is waiting for staff approval. Nothing has been sent to the author yet.
         </p>
       )}
+      {waitingForRevision && !pending && (
+        <p className="mt-5 text-sm text-muted-foreground">
+          Waiting for the author to upload the revised PDF. It will remain this same paper and will
+          return here for review when received.
+        </p>
+      )}
       {closed && (
         <p className="mt-5 text-sm text-muted-foreground">
           This manuscript has a final decision and is closed for initial review.
         </p>
       )}
 
-      {open && !pending && !closed && (
+      {open && !pending && !closed && !waitingForRevision && (
         <div className="mt-5 space-y-4 border-t border-border pt-5">
           <div className="flex gap-2">
-            {(["accept", "decline"] as const).map((choice) => (
+            {(["accept", "formatting", "decline"] as const).map((choice) => (
               <button
                 key={choice}
                 type="button"
                 onClick={() => setAction(choice)}
                 className={`${secondaryButton} ${action === choice ? "border-primary bg-primary text-primary-foreground" : ""}`}
               >
-                Recommend {choice}
+                {choice === "formatting" ? "Request revisions" : `Recommend ${choice}`}
               </button>
             ))}
           </div>

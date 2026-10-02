@@ -95,7 +95,14 @@ export const listFeaturedArticles = createServerFn({ method: "GET" }).handler(as
 export const incrementCitation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
-  .handler(async ({ data }): Promise<number> => {
+  .handler(async ({ data, context }): Promise<number> => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({
+      scope: "citation-increment",
+      limit: 60,
+      windowSeconds: 60 * 60,
+      identity: context.userId,
+    });
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: next, error } = await supabaseAdmin.rpc("increment_citation_count", {
       _id: data.id,

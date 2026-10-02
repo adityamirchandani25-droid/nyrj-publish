@@ -29,6 +29,8 @@ function statusLabel(s: string) {
       return "Edits received";
     case "sent_to_author":
       return "Edits sent to author";
+    case "no_response":
+      return "No response — 15-day deadline passed";
     default:
       return s;
   }
@@ -170,7 +172,7 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
                 {new Date(a.due_at).toLocaleDateString()}
                 {a.assigned_by ? ` · by ${a.assigned_by}` : ""}
               </p>
-              {a.status !== "declined" && (
+              {!["declined", "no_response"].includes(a.status) && (
                 <button
                   className={`${btnGhost} mt-2`}
                   disabled={busy}

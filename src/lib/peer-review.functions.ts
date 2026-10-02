@@ -1,10 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { MASTER_STAFF_EMAILS } from "./staff-recipients";
 
 const SITE_URL = "https://nyrj.org";
 
 /** Editors who are notified about reviewer activity. */
-export const EDITOR_RECIPIENTS = ["keyaanmerchant24@gmail.com", "Madhavarora529@gmail.com"];
+export const EDITOR_RECIPIENTS = MASTER_STAFF_EMAILS;
 
 const StaffSchema = z.object({ staffToken: z.string().min(1) });
 const ReviewerSchema = z.object({ reviewerToken: z.string().min(1) });
@@ -276,7 +277,7 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
 
     const { data: sub, error: submissionError } = await supabaseAdmin
       .from("manuscript_submissions")
-      .select("title, submitter_email, authors, resubmit_token")
+      .select("title, submitter_email, authors, resubmit_token, decision, deleted_at")
       .eq("id", submissionId)
       .single();
     if (submissionError || !sub) throw new Error("Submission not found.");
@@ -285,16 +286,27 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
       submitter_email?: string;
       authors?: Array<{ name?: string }>;
       resubmit_token?: string | null;
+      decision?: string;
+      deleted_at?: string | null;
     };
     if (!s.submitter_email) throw new Error("No author email on this submission.");
+    if (s.deleted_at || s.decision !== "pending") {
+      throw new Error("This submission already has a final decision and cannot request edits.");
+    }
 
     const resubmitToken = s.resubmit_token ?? newResubmitToken();
-    if (!s.resubmit_token) {
-      const { error: tokenError } = await supabaseAdmin
-        .from("manuscript_submissions")
-        .update({ resubmit_token: resubmitToken } as never)
-        .eq("id", submissionId);
-      if (tokenError) throw new Error("Could not create the author's resubmission link.");
+    // Activate the revision window before sending the email so the link works
+    // the instant it arrives. Re-sending feedback safely reuses the same token.
+    const { data: revisionState, error: tokenError } = await supabaseAdmin
+      .from("manuscript_submissions")
+      .update({ resubmit_token: resubmitToken, status: "waiting for edits" } as never)
+      .eq("id", submissionId)
+      .eq("decision", "pending")
+      .is("deleted_at", null)
+      .select("id")
+      .maybeSingle();
+    if (tokenError || !revisionState) {
+      throw new Error("This paper is no longer open for revisions.");
     }
     const resubmitUrl = `${SITE_URL}/resubmit?token=${resubmitToken}`;
 
@@ -318,6 +330,13 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
         edits_sent_body: data.body,
       } as never)
       .eq("id", data.assignmentId);
+
+    try {
+      const { updateSubmissionRow } = await import("./excel-sync.server");
+      await updateSubmissionRow(submissionId, { status: "waiting for edits" });
+    } catch (syncError) {
+      console.error("[server] revision-request workbook sync failed:", syncError);
+    }
 
     await audit(
       submissionId,
@@ -343,6 +362,8 @@ export const registerReviewer = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({ scope: "reviewer-register", limit: 3, windowSeconds: 60 * 60 });
     const { hashPassword, newSalt, audit } = await import("./peer-review.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const salt = newSalt();
@@ -390,6 +411,8 @@ export const reviewerLogin = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({ scope: "reviewer-login", limit: 8, windowSeconds: 10 * 60 });
     const { verifyPassword, issueReviewerToken } = await import("./peer-review.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row } = await supabaseAdmin
@@ -792,6 +815,14 @@ export const listMyAssignments = createServerFn({ method: "POST" })
 export const requestReviewerPasswordReset = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ email: z.string().trim().email().max(255) }).parse(d))
   .handler(async ({ data }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({ scope: "reviewer-reset-ip", limit: 5, windowSeconds: 60 * 60 });
+    await enforceRateLimit({
+      scope: "reviewer-reset-email",
+      limit: 3,
+      windowSeconds: 60 * 60,
+      identity: data.email.toLowerCase(),
+    });
     const { issueResetToken, audit } = await import("./peer-review.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row } = await supabaseAdmin
@@ -837,6 +868,8 @@ export const resetReviewerPassword = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({ scope: "reviewer-reset-use", limit: 10, windowSeconds: 60 * 60 });
     const { verifyResetToken, resetTokenMatches, hashPassword, newSalt, audit } =
       await import("./peer-review.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

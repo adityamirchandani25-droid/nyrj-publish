@@ -80,6 +80,8 @@ function statusText(s: string) {
       return "Review submitted — thank you";
     case "sent_to_author":
       return "Feedback shared with the author";
+    case "no_response":
+      return "Review window closed — deadline passed";
     default:
       return s;
   }

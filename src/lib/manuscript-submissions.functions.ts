@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { MASTER_STAFF_EMAILS } from "./staff-recipients";
 
 const AuthorSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(200),
@@ -44,6 +45,53 @@ const AdditionalFileRefSchema = z.object({
   description: z.string().trim().min(1, "Description required").max(500),
 });
 
+const SubmissionUploadSchema = z.object({
+  filename: z.string().trim().min(1).max(255),
+  size: z
+    .number()
+    .int()
+    .min(1)
+    .max(25 * 1024 * 1024),
+});
+
+const ALLOWED_UPLOAD_EXTENSIONS = new Set([".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg"]);
+
+function safeUploadName(filename: string) {
+  const lower = filename.toLowerCase();
+  const extension = [...ALLOWED_UPLOAD_EXTENSIONS].find((value) => lower.endsWith(value));
+  if (!extension) throw new Error("That file type is not allowed.");
+  return filename.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-120);
+}
+
+/** Issues the only write path for initial submission files. */
+export const createSubmissionUpload = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => SubmissionUploadSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({
+      scope: "submission-upload-hour",
+      limit: 60,
+      windowSeconds: 60 * 60,
+      identity: context.userId,
+    });
+    await enforceRateLimit({
+      scope: "submission-upload-day",
+      limit: 100,
+      windowSeconds: 24 * 60 * 60,
+      identity: context.userId,
+    });
+
+    const safe = safeUploadName(data.filename);
+    const path = `${context.userId}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${safe}`;
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: signed, error } = await supabaseAdmin.storage
+      .from("submissions")
+      .createSignedUploadUrl(path);
+    if (error || !signed) throw new Error("Could not prepare the secure upload.");
+    return { path, token: signed.token };
+  });
+
 const SubmissionSchema = z.object({
   title: z.string().trim().min(3).max(500),
   abstract: z.string().trim().max(8000).optional().default(""),
@@ -84,8 +132,34 @@ export const submitManuscript = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => SubmissionSchema.parse(d))
   .handler(async ({ data, context }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({
+      scope: "manuscript-submit-hour",
+      limit: 10,
+      windowSeconds: 60 * 60,
+      identity: context.userId,
+    });
+    await enforceRateLimit({
+      scope: "manuscript-submit-day",
+      limit: 20,
+      windowSeconds: 24 * 60 * 60,
+      identity: context.userId,
+    });
     const email = (context.claims.email as string | undefined) ?? "";
     if (!email) throw new Error("No email on account");
+
+    const ownedPrefix = `${context.userId}/`;
+    const filePaths = [
+      data.manuscriptPath,
+      ...data.supplementaryPaths.map((file) => file.path),
+      ...data.consentFormPaths.map((file) => file.path),
+    ];
+    if (
+      !data.manuscriptPath ||
+      filePaths.some((path) => !path.startsWith(ownedPrefix) || path.includes(".."))
+    ) {
+      throw new Error("One or more uploaded files are not valid for this account.");
+    }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
@@ -155,11 +229,10 @@ export const submitManuscript = createServerFn({ method: "POST" })
     }
 
     // Notify the editorial team (managed email). Never block the submission.
-    const editorEmails = ["keyaanmerchant24@gmail.com", "Madhavarora529@gmail.com"];
     try {
       const { sendTemplateEmail } = await import("./email-templates/send-email");
       await Promise.all(
-        editorEmails.map((recipient) =>
+        MASTER_STAFF_EMAILS.map((recipient) =>
           sendTemplateEmail("manuscript-submission", recipient, {
             idempotencyKey: `manuscript-submission-${row.id}-${recipient}`,
             replyTo: email,

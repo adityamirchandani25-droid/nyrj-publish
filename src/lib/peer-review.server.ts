@@ -2,6 +2,7 @@
 // - Reviewer passwords are hashed with PBKDF2-SHA256 (WebCrypto, worker-safe).
 // - Reviewer sessions use a short-lived HMAC token, same shape as staff tokens.
 import { createHmac, timingSafeEqual } from "crypto";
+import { MASTER_STAFF_EMAILS } from "./staff-recipients";
 
 const TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days
 const PBKDF2_ITERATIONS = 100_000;
@@ -145,27 +146,45 @@ export async function audit(
  * Gentle follow-ups:
  *  - no response 7 days after the invitation was sent
  *  - accepted but no review 10 days after assignment
+ *  - after the 15-day deadline, close the assignment as no-response, record
+ *    it in paper history, and alert staff to assign somebody else
  * Each reviewer is reminded at most once per assignment per stage.
  */
 export async function runReviewReminders(): Promise<{
   inviteReminders: number;
   reviewReminders: number;
+  noResponses: number;
+  staffDeadlineAlerts: number;
 }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { sendTemplateEmail } = await import("./email-templates/send-email");
+  const { sendTemplateEmail, sendTemplateEmailToMany } =
+    await import("./email-templates/send-email");
   const SITE_URL = "https://nyrj.org";
   const now = Date.now();
   const days = (n: number) => new Date(now - n * 24 * 60 * 60 * 1000).toISOString();
   const fmt = (iso: string) =>
     new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
-  const { data: rows } = await supabaseAdmin
-    .from("review_assignments")
-    .select(
-      "id, submission_id, reviewer_email, reviewer_name, status, assigned_at, due_at, invite_token, review_submitted_at, invite_reminder_sent_at, review_reminder_sent_at",
-    )
-    .in("status", ["invited", "accepted"])
-    .limit(300);
+  const reminderColumns =
+    "id, submission_id, reviewer_email, reviewer_name, status, assigned_at, due_at, responded_at, invite_token, review_submitted_at, invite_reminder_sent_at, review_reminder_sent_at, no_response_notified_at";
+  const [activeResult, retryResult] = await Promise.all([
+    supabaseAdmin
+      .from("review_assignments")
+      .select(reminderColumns)
+      .in("status", ["invited", "accepted"])
+      .order("due_at", { ascending: true })
+      .limit(300),
+    supabaseAdmin
+      .from("review_assignments")
+      .select(reminderColumns)
+      .eq("status", "no_response")
+      .is("no_response_notified_at", null)
+      .order("due_at", { ascending: true })
+      .limit(300),
+  ]);
+  if (activeResult.error) throw new Error(activeResult.error.message);
+  if (retryResult.error) throw new Error(retryResult.error.message);
+  const rows = [...(activeResult.data ?? []), ...(retryResult.data ?? [])];
 
   const list = (rows ?? []) as Array<{
     id: string;
@@ -175,27 +194,109 @@ export async function runReviewReminders(): Promise<{
     status: string;
     assigned_at: string;
     due_at: string;
+    responded_at: string | null;
     invite_token: string;
     review_submitted_at: string | null;
     invite_reminder_sent_at: string | null;
     review_reminder_sent_at: string | null;
+    no_response_notified_at: string | null;
   }>;
 
   let inviteReminders = 0;
   let reviewReminders = 0;
+  let noResponses = 0;
+  let staffDeadlineAlerts = 0;
 
   for (const r of list) {
-    const awaitingResponse = r.status === "invited";
-    const overdue = awaitingResponse
-      ? !r.invite_reminder_sent_at && r.assigned_at < days(7)
-      : !r.review_reminder_sent_at && !r.review_submitted_at && r.assigned_at < days(10);
-    if (!overdue) continue;
+    let status = r.status;
+    const acceptedInvitation = Boolean(r.responded_at);
+    const deadlinePassed =
+      status !== "no_response" && Boolean(r.due_at) && Date.parse(r.due_at) <= now;
 
     const { data: sub } = await supabaseAdmin
       .from("manuscript_submissions")
       .select("title")
       .eq("id", r.submission_id)
       .single();
+    const title = (sub as { title?: string } | null)?.title ?? "the assigned manuscript";
+
+    if (deadlinePassed) {
+      const { data: expired, error: expireError } = await supabaseAdmin
+        .from("review_assignments")
+        .update({ status: "no_response" } as never)
+        .eq("id", r.id)
+        .in("status", ["invited", "accepted"])
+        .select("id")
+        .maybeSingle();
+      if (expireError) {
+        console.error("[server] reviewer deadline update failed:", expireError);
+        continue;
+      }
+      if (expired) {
+        status = "no_response";
+        noResponses++;
+        await audit(
+          r.submission_id,
+          "system",
+          "No response after 15 days",
+          acceptedInvitation
+            ? `${r.reviewer_email} accepted but did not submit a review by ${fmt(r.due_at)}`
+            : `${r.reviewer_email} did not respond by ${fmt(r.due_at)}`,
+        );
+      } else {
+        // Another invocation already handled this row. Do not send a late
+        // reminder from stale data.
+        continue;
+      }
+    }
+
+    if (status === "no_response") {
+      if (r.no_response_notified_at) continue;
+      try {
+        await sendTemplateEmailToMany("reviewer-no-response", MASTER_STAFF_EMAILS, (to) => ({
+          idempotencyKey: `reviewer-no-response-${r.id}-${to}`,
+          replyTo: "NYRJINFO@gmail.com",
+          templateData: {
+            reviewerName: r.reviewer_name || "Reviewer",
+            reviewerEmail: r.reviewer_email,
+            title,
+            submissionId: r.submission_id,
+            dueDate: r.due_at ? fmt(r.due_at) : "",
+            acceptedInvitation,
+            dashboardUrl: `${SITE_URL}/admin/submissions`,
+          },
+        }));
+        const notifiedAt = new Date().toISOString();
+        const { error: notifiedError } = await supabaseAdmin
+          .from("review_assignments")
+          .update({ no_response_notified_at: notifiedAt } as never)
+          .eq("id", r.id)
+          .is("no_response_notified_at", null);
+        if (notifiedError) throw new Error(notifiedError.message);
+        staffDeadlineAlerts++;
+        await audit(
+          r.submission_id,
+          "system",
+          "Staff notified of reviewer no response",
+          `Deadline alert sent to ${MASTER_STAFF_EMAILS.length} staff recipients`,
+        );
+      } catch (error) {
+        console.error("[server] reviewer deadline staff alert failed:", error);
+        await audit(
+          r.submission_id,
+          "system",
+          "Reviewer no-response alert failed",
+          "The daily job will retry the staff email.",
+        );
+      }
+      continue;
+    }
+
+    const awaitingResponse = status === "invited";
+    const overdue = awaitingResponse
+      ? !r.invite_reminder_sent_at && r.assigned_at < days(7)
+      : !r.review_reminder_sent_at && !r.review_submitted_at && r.assigned_at < days(10);
+    if (!overdue) continue;
 
     try {
       await sendTemplateEmail("reviewer-reminder", r.reviewer_email, {
@@ -203,7 +304,7 @@ export async function runReviewReminders(): Promise<{
         replyTo: "NYRJINFO@gmail.com",
         templateData: {
           reviewerName: r.reviewer_name || "Reviewer",
-          title: (sub as { title?: string } | null)?.title ?? "your assigned manuscript",
+          title,
           dueDate: r.due_at ? fmt(r.due_at) : "",
           inviteUrl: `${SITE_URL}/review?token=${r.invite_token}`,
           awaitingResponse,
@@ -230,5 +331,5 @@ export async function runReviewReminders(): Promise<{
     }
   }
 
-  return { inviteReminders, reviewReminders };
+  return { inviteReminders, reviewReminders, noResponses, staffDeadlineAlerts };
 }

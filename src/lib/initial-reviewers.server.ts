@@ -4,7 +4,7 @@
 
 export type InitialReviewer = { id: string; name: string; email: string };
 
-/** Picks the active reviewer with the fewest assignments and books them in. */
+/** Picks the active reviewer with the fewest open assignments and books them in. */
 export async function assignInitialReviewer(
   submissionId: string,
   title: string,
@@ -32,22 +32,55 @@ export async function assignInitialReviewer(
     .from("initial_reviewers")
     .select("id, name, email, assigned_count")
     .eq("active", true)
-    .order("assigned_count", { ascending: true })
     .order("created_at", { ascending: true })
-    .limit(1);
+    .limit(100);
 
-  const pick = (pool ?? [])[0] as
-    { id: string; name: string; email: string; assigned_count: number } | undefined;
+  const candidates = (pool ?? []) as Array<{
+    id: string;
+    name: string;
+    email: string;
+    assigned_count: number;
+  }>;
+  if (!candidates.length) return null;
+
+  const { data: openPapers, error: openError } = await supabaseAdmin
+    .from("manuscript_submissions")
+    .select("initial_reviewer_email")
+    .is("deleted_at", null)
+    .eq("decision", "pending")
+    .neq("status", "published")
+    .neq("initial_reviewer_email", "")
+    .limit(1000);
+  if (openError) throw new Error(openError.message);
+  const openCounts = new Map<string, number>();
+  for (const paper of (openPapers ?? []) as Array<{ initial_reviewer_email: string }>) {
+    const key = paper.initial_reviewer_email.trim().toLowerCase();
+    openCounts.set(key, (openCounts.get(key) ?? 0) + 1);
+  }
+  const pick = candidates.reduce((best, candidate) => {
+    const candidateCount = openCounts.get(candidate.email.trim().toLowerCase()) ?? 0;
+    const bestCount = openCounts.get(best.email.trim().toLowerCase()) ?? 0;
+    return candidateCount < bestCount ? candidate : best;
+  });
   if (!pick) return null;
 
-  await supabaseAdmin
+  // The condition makes repeated/concurrent sweeps idempotent for this paper:
+  // only the first caller can fill an empty assignment.
+  const { data: assigned, error: assignmentError } = await supabaseAdmin
     .from("manuscript_submissions")
     .update({
       initial_reviewer_name: pick.name,
       initial_reviewer_email: pick.email,
       initial_reviewer_assigned_at: new Date().toISOString(),
     } as never)
-    .eq("id", submissionId);
+    .eq("id", submissionId)
+    .eq("decision", "pending")
+    .eq("initial_reviewer_email", "")
+    .is("deleted_at", null)
+    .select("id")
+    .maybeSingle();
+  if (assignmentError) throw new Error(assignmentError.message);
+  if (!assigned) return null;
 
   await supabaseAdmin
     .from("initial_reviewers")
