@@ -512,7 +512,7 @@ const ResubmitToken = z.object({ token: z.string().trim().min(10).max(200) });
 
 async function submissionForToken(token: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("manuscript_submissions")
     .select(
       "id, title, submitter_email, current_version, status, decision, authors, manuscript_path, manuscript_filename",
@@ -520,6 +520,7 @@ async function submissionForToken(token: string) {
     .eq("resubmit_token", token)
     .is("deleted_at", null)
     .maybeSingle();
+  if (error) throw new Error("Could not check this revision link. Please try again.");
   const row = data as {
     id: string;
     title: string;
@@ -552,7 +553,34 @@ export const getResubmitInfo = createServerFn({ method: "POST" })
     const { enforceRateLimit } = await import("./rate-limit.server");
     await enforceRateLimit({ scope: "revision-info", limit: 30, windowSeconds: 10 * 60 });
     const row = await submissionForToken(data.token);
-    return { title: row.title, version: row.current_version, status: row.status };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [review, editorial] = await Promise.all([
+      supabaseAdmin
+        .from("review_assignments")
+        .select("edits_sent_body, edits_sent_at")
+        .eq("submission_id", row.id)
+        .not("edits_sent_at", "is", null)
+        .order("edits_sent_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("editor_recommendations")
+        .select("comments, staff_message, reviewed_at")
+        .eq("submission_id", row.id)
+        .eq("action", "formatting")
+        .eq("status", "approved")
+        .order("reviewed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    if (review.error || editorial.error) throw new Error("Could not load the requested edits.");
+    const reviewAt = review.data?.edits_sent_at ?? "";
+    const editorialAt = editorial.data?.reviewed_at ?? "";
+    const requestedEdits =
+      reviewAt > editorialAt
+        ? (review.data?.edits_sent_body ?? "")
+        : editorial.data?.staff_message?.trim() || editorial.data?.comments || "";
+    return { title: row.title, version: row.current_version, status: row.status, requestedEdits };
   });
 
 /** Signed upload URL so the browser can send the file straight to storage. */

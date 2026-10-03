@@ -33,6 +33,15 @@ export type CitationArticle = {
 };
 
 export function splitAuthors(authors: string): string[] {
+  if (authors.includes(";")) {
+    return authors
+      .split(/\s*;\s*/)
+      .map((author) => {
+        const parts = author.split(/\s*,\s*/);
+        return parts.length === 2 ? `${parts[1]} ${parts[0]}`.trim() : author.trim();
+      })
+      .filter(Boolean);
+  }
   return authors
     .split(/\s*(?:,|;| and | & )\s*/i)
     .map((author) => author.trim())
@@ -43,8 +52,17 @@ export function publicationYear(article: CitationArticle): string {
   return (article.publication_date ?? article.added_at).slice(0, 4);
 }
 
+export function normalizedDoi(doi: string | null): string | null {
+  const value = doi
+    ?.trim()
+    .replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")
+    .replace(/^doi:\s*/i, "");
+  return value || null;
+}
+
 export function articleUrl(article: CitationArticle): string {
-  return article.doi ? `https://doi.org/${article.doi}` : `${SITE_URL}/article/${article.slug}`;
+  const doi = normalizedDoi(article.doi);
+  return doi ? `https://doi.org/${doi}` : `${SITE_URL}/article/${article.slug}`;
 }
 
 function nameParts(fullName: string) {
@@ -101,6 +119,7 @@ export function buildCitationBundle(article: CitationArticle): CitationBundle {
   const authors = splitAuthors(article.authors);
   const year = publicationYear(article);
   const url = articleUrl(article);
+  const doi = normalizedDoi(article.doi);
   const issue = article.issue ? `, ${article.issue}` : "";
   const bibtexFields = [
     `  author = {${escapeBibtex(authors.join(" and "))}},`,
@@ -109,7 +128,7 @@ export function buildCitationBundle(article: CitationArticle): CitationBundle {
     `  year = {${year}},`,
     ...(article.issue ? [`  number = {${escapeBibtex(article.issue)}},`] : []),
     `  issn = {${CITATION_ISSN}},`,
-    ...(article.doi ? [`  doi = {${escapeBibtex(article.doi)}},`] : []),
+    ...(doi ? [`  doi = {${escapeBibtex(doi)}},`] : []),
     `  url = {${url}}`,
   ];
 
@@ -126,7 +145,7 @@ export function buildCitationBundle(article: CitationArticle): CitationBundle {
       `JO  - ${CITATION_JOURNAL_TITLE}`,
       ...(article.issue ? [`IS  - ${article.issue}`] : []),
       `SN  - ${CITATION_ISSN}`,
-      ...(article.doi ? [`DO  - ${article.doi}`] : []),
+      ...(doi ? [`DO  - ${doi}`] : []),
       `UR  - ${url}`,
       "ER  -",
     ].join("\n"),

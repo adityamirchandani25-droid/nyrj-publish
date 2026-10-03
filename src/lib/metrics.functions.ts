@@ -1,20 +1,35 @@
 import { createServerFn } from "@tanstack/react-start";
+import { splitAuthors } from "./citation-formats";
 
 function countAuthors(authors: string | null | undefined): number {
   if (!authors) return 0;
-  return authors
-    .split(/,|;|&| and /i)
-    .map((s) => s.trim())
-    .filter(Boolean).length;
+  return splitAuthors(authors).length;
 }
 
 export const getJournalStats = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
   const [libRes, subRes] = await Promise.all([
-    supabaseAdmin
-      .from("library_entries")
-      .select("authors, citation_count, publication_date, added_at"),
+    (async () => {
+      const pageSize = 1000;
+      const page = (offset: number) =>
+        supabaseAdmin
+          .from("library_entries")
+          .select("id, authors, citation_count, publication_date, added_at")
+          .order("id")
+          .range(offset, offset + pageSize - 1);
+      let result = await page(0);
+      const rows = [...(result.data ?? [])];
+      for (
+        let offset = pageSize;
+        !result.error && (result.data?.length ?? 0) === pageSize;
+        offset += pageSize
+      ) {
+        result = await page(offset);
+        rows.push(...(result.data ?? []));
+      }
+      return { data: rows, error: result.error };
+    })(),
     supabaseAdmin
       .from("manuscript_submissions")
       .select("authors, status, decision, created_at, updated_at")
@@ -22,7 +37,7 @@ export const getJournalStats = createServerFn({ method: "GET" }).handler(async (
   ]);
 
   // If the database is unreachable we must NOT present zeros as real figures.
-  const unavailable = Boolean(libRes.error) && Boolean(subRes.error);
+  const unavailable = Boolean(libRes.error) || Boolean(subRes.error);
 
   const entries = libRes.data ?? [];
   const subs = subRes.data ?? [];
@@ -102,21 +117,7 @@ export const getJournalStats = createServerFn({ method: "GET" }).handler(async (
   };
 
   // ---- Citations & impact ----
-  // Impact factor, in the standard Journal Impact Factor form: citations
-  // recorded in the current year to items published in the two prior years,
-  // divided by the number of citable items published in those two years.
-  const year = new Date().getUTCFullYear();
-  const yearOf = (e: { publication_date?: string | null; added_at?: string | null }) => {
-    const d = e.publication_date ?? e.added_at;
-    return d ? new Date(d).getUTCFullYear() : null;
-  };
   const citations = entries.reduce((n, e) => n + (Number(e.citation_count) || 0), 0);
-  const window2 = entries.filter((e) => {
-    const y = yearOf(e);
-    return y === year - 1 || y === year - 2;
-  });
-  const windowCitations = window2.reduce((n, e) => n + (Number(e.citation_count) || 0), 0);
-  const impactFactor = window2.length > 0 ? windowCitations / window2.length : null;
   const citationsPerArticle = articles > 0 ? citations / articles : null;
 
   return {
@@ -129,8 +130,6 @@ export const getJournalStats = createServerFn({ method: "GET" }).handler(async (
     studentsImpacted: studentsImpacted + (Number.isFinite(eventAttendance) ? eventAttendance : 0),
     eventAttendance: Number.isFinite(eventAttendance) ? eventAttendance : 0,
     citations,
-    impactFactor,
-    impactWindowItems: window2.length,
     citationsPerArticle,
   };
 });

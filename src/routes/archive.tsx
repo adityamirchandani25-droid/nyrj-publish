@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
-import { getLibrary, removeEntry, updateEntry, type LibraryEntry } from "@/lib/library";
+import { getLibrary, updateEntry, type LibraryEntry } from "@/lib/library";
 import { getSession, isStaff, onAuthChange, type Session } from "@/lib/auth";
+import { generateArticleCitations } from "@/lib/citation-generator.functions";
 
 export const Route = createFileRoute("/archive")({
   head: () => ({
@@ -45,82 +46,53 @@ const MONTHS = [
   "December",
 ];
 
-const JOURNAL_TITLE = "National Youth Research Journal (NYRJ)";
-const SITE_URL = "https://nyrj.org";
-
-function splitAuthors(authors: string): string[] {
-  const trimmed = authors.trim();
-  // Prefer strong separators first so "Last, First; Last, First" survives intact.
-  let parts: string[];
-  if (trimmed.includes(";")) {
-    parts = trimmed.split(/\s*;\s*/);
-  } else if (/\s+(?:and|&)\s+/i.test(trimmed)) {
-    parts = trimmed.split(/\s+(?:and|&)\s+/i);
-  } else {
-    parts = trimmed.split(/\s*,\s*/);
-  }
-  return parts.map((s) => s.trim()).filter(Boolean);
-}
-
-/** Convert a single name to APA "Last, F. M." form. Accepts "First M Last" or "Last, First M". */
-function toApaName(full: string): string {
-  const s = full.trim();
-  if (!s) return "";
-  if (s.includes(",")) {
-    const [last, rest = ""] = s.split(/\s*,\s*/, 2);
-    const givens = rest.trim().split(/\s+/).filter(Boolean);
-    if (!givens.length) return last;
-    const initials = givens.map((p) => `${p[0]?.toUpperCase()}.`).join(" ");
-    return `${last}, ${initials}`;
-  }
-  const parts = s.split(/\s+/);
-  if (parts.length === 1) return `${parts[0]}.`;
-  const last = parts[parts.length - 1];
-  const initials = parts
-    .slice(0, -1)
-    .map((p) => `${p[0]?.toUpperCase()}.`)
-    .join(" ");
-  return `${last}, ${initials}`;
-}
-
-/** Join author list per APA: "A", "A, & B", "A, B, & C". */
-function joinApaAuthors(names: string[]): string {
-  if (names.length === 0) return "";
-  if (names.length === 1) return names[0];
-  if (names.length === 2) return `${names[0]}, & ${names[1]}`;
-  return `${names.slice(0, -1).join(", ")}, & ${names[names.length - 1]}`;
-}
-
-/** APA-style citation for a Library entry. */
-function formatCitation(e: LibraryEntry): string {
-  const year = new Date(e.addedAt).getFullYear();
-  const apaAuthors = joinApaAuthors(splitAuthors(e.authors).map(toApaName));
-  const issuePart = e.issue ? `, ${e.issue}` : "";
-  const tail = e.doi ? ` https://doi.org/${e.doi}` : ` ${SITE_URL}/article/${e.slug}`;
-  return `${apaAuthors} (${year}). ${e.title}. ${JOURNAL_TITLE}${issuePart}.${tail}`;
-}
-
 function CopyCitationButton({ entry }: { entry: LibraryEntry }) {
   const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [citation, setCitation] = useState("");
   return (
-    <button
-      type="button"
-      onClick={async (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        try {
-          await navigator.clipboard.writeText(formatCitation(entry));
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        } catch {
-          /* ignore */
-        }
-      }}
-      className="shrink-0 px-3 py-1.5 border border-border text-[10px] uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition"
-      title="Copy APA citation"
-    >
-      {copied ? "Copied ✓" : "Copy citation"}
-    </button>
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setError("");
+          try {
+            const bundle = await generateArticleCitations({ data: { id: entry.id } });
+            setCitation(bundle.apa);
+            try {
+              await navigator.clipboard.writeText(bundle.apa);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            } catch {
+              setError("Select the citation below to copy it.");
+            }
+          } catch {
+            setError("Could not generate the citation.");
+          } finally {
+            setBusy(false);
+          }
+        }}
+        className="shrink-0 px-3 py-1.5 border border-border text-[10px] uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition disabled:opacity-50"
+        title="Generate and copy APA citation"
+      >
+        {busy ? "Generating…" : copied ? "Copied ✓" : "Generate citation"}
+      </button>
+      <Link
+        to="/article/$slug"
+        params={{ slug: entry.slug }}
+        hash="cite-this-article"
+        className="text-[10px] text-accent underline"
+      >
+        All citation formats
+      </Link>
+      {error && <span className="text-[10px] text-destructive">{error}</span>}
+      {citation && (
+        <p className="max-w-xs select-text text-right text-xs text-foreground">{citation}</p>
+      )}
+    </div>
   );
 }
 
@@ -151,12 +123,6 @@ function Library() {
   }, []);
 
   const staff = isStaff(session);
-
-  async function handleRemove(id: string, title: string) {
-    if (!window.confirm(`Remove "${title}" from the Library? This cannot be undone.`)) return;
-    await removeEntry(id);
-    setEntries(await getLibrary());
-  }
 
   const years = useMemo(() => {
     const s = new Set<number>();
@@ -351,15 +317,6 @@ function Library() {
                       </span>
                     )}
                     <CopyCitationButton entry={e} />
-                    {staff && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemove(e.id, e.title)}
-                        className="px-3 py-1.5 border border-destructive text-destructive text-[10px] uppercase tracking-[0.2em] hover:bg-destructive hover:text-destructive-foreground transition"
-                      >
-                        Remove
-                      </button>
-                    )}
                   </div>
                 </div>
                 {staff && (
@@ -392,7 +349,7 @@ function Library() {
 
         {staff && (
           <p className="mt-10 text-xs text-muted-foreground">
-            Staff mode: remove buttons are visible next to each manuscript.
+            Staff mode: publication metadata can be edited below each manuscript.
           </p>
         )}
       </section>

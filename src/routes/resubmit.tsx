@@ -26,7 +26,12 @@ const btn =
 
 function ResubmitPage() {
   const { token } = Route.useSearch();
-  const [info, setInfo] = useState<{ title: string; version: number; status: string } | null>(null);
+  const [info, setInfo] = useState<{
+    title: string;
+    version: number;
+    status: string;
+    requestedEdits: string;
+  } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [note, setNote] = useState("");
@@ -103,6 +108,16 @@ function ResubmitPage() {
                 Current version: v{info.version} · {info.status}
               </p>
             </div>
+            {info.requestedEdits && (
+              <div className="border-l-2 border-accent bg-card px-5 py-4">
+                <p className="text-[10px] uppercase tracking-[0.25em] text-accent">
+                  Requested edits
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
+                  {info.requestedEdits}
+                </p>
+              </div>
+            )}
             <p className="text-sm text-muted-foreground">
               Your title, authors, abstract, declarations, reviewer assignment, and all other
               submission details are already saved. This replaces only the current manuscript PDF on

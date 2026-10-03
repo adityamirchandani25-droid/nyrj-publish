@@ -52,7 +52,7 @@ function MetricsPage() {
     {
       value: num(stats.articles),
       label: "Articles published",
-      detail: `${dec(stats.citationsPerArticle)} citations per article · Total peer-reviewed, open-access manuscripts currently available in the NYRJ public library.`,
+      detail: `${dec(stats.citationsPerArticle)} indexed citations per article · Total peer-reviewed, open-access manuscripts currently available in the NYRJ public library.`,
     },
     {
       value: num(stats.researchers),
@@ -129,19 +129,18 @@ function MetricsPage() {
 
         <h2 className="font-serif text-3xl text-primary mt-16">Citation impact.</h2>
         <p className="mt-3 text-muted-foreground max-w-2xl">
-          Every NYRJ article is registered with a Crossref DOI, so citations to our work are
-          discoverable and countable. A dash means we do not yet hold enough verified data to
-          publish a figure.
+          Citation counts are fetched for articles with DOIs from OpenAlex, with Crossref as a
+          fallback. Indexing can lag publication, and articles without DOIs are not monitored.
         </p>
 
         <div className="mt-8 border border-border bg-card p-6">
-          <p className="font-serif text-4xl text-primary">{dec(stats.impactFactor)}</p>
+          <p className="font-serif text-4xl text-primary">{num(stats.citations)}</p>
           <p className="mt-2 text-[11px] uppercase tracking-[0.2em] text-accent">
-            Total impact score
+            Indexed citations
           </p>
           <p className="mt-3 text-sm text-foreground/80 leading-relaxed">
-            Citations recorded this year to articles published in the previous two years, divided by
-            the number of those articles.
+            Lifetime citations currently reported by the scholarly indexes for published articles
+            with DOIs. Copying a citation on this site does not change this count.
           </p>
         </div>
 

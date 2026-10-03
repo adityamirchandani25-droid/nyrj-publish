@@ -310,6 +310,18 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
     }
     const resubmitUrl = `${SITE_URL}/resubmit?token=${resubmitToken}`;
 
+    // Save the exact feedback first so the student account can show it even
+    // if email delivery is delayed or fails.
+    const { error: saveEditsError } = await supabaseAdmin
+      .from("review_assignments")
+      .update({
+        status: "sent_to_author",
+        edits_sent_at: new Date().toISOString(),
+        edits_sent_body: data.body,
+      } as never)
+      .eq("id", data.assignmentId);
+    if (saveEditsError) throw new Error("Could not save the requested edits.");
+
     const { sendTemplateEmail } = await import("./email-templates/send-email");
     await sendTemplateEmail("author-edits", s.submitter_email, {
       idempotencyKey: `author-edits-${data.assignmentId}-${Date.now()}`,
@@ -321,15 +333,6 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
         resubmitUrl,
       },
     });
-
-    await supabaseAdmin
-      .from("review_assignments")
-      .update({
-        status: "sent_to_author",
-        edits_sent_at: new Date().toISOString(),
-        edits_sent_body: data.body,
-      } as never)
-      .eq("id", data.assignmentId);
 
     try {
       const { updateSubmissionRow } = await import("./excel-sync.server");

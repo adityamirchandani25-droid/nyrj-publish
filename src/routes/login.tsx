@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
+import { AuthorDashboard } from "@/components/AuthorDashboard";
 import {
   bridgeSupabaseSession,
   getSession,
@@ -148,6 +149,7 @@ function LoginPage() {
           {isResearcher(current) && (
             <>
               <AuthorGuidelinesPanel />
+              <AuthorDashboard email={current.username} />
               <SubmissionTracker email={current.username} />
             </>
           )}
@@ -837,26 +839,19 @@ function SubmissionTracker({ email }: { email: string }) {
     };
   }, [email]);
 
+  if (!rows?.length) return null;
+
   return (
     <div className="mt-14 border-t-2 border-primary pt-8">
-      <p className="text-[10px] uppercase tracking-[0.35em] text-accent">Your Submissions</p>
-      <h3 className="font-serif text-3xl text-primary mt-2">Track Submissions</h3>
+      <p className="text-[10px] uppercase tracking-[0.35em] text-accent">Additional Records</p>
+      <h3 className="font-serif text-3xl text-primary mt-2">Editor-tracked manuscripts</h3>
       <p className="mt-3 text-muted-foreground text-sm">
         Live status of every manuscript tied to <span className="text-accent">{email}</span>.
       </p>
 
       {error && <p className="mt-4 text-xs text-destructive">{error}</p>}
 
-      {rows === null && !error && <p className="mt-6 text-sm text-muted-foreground">Loading…</p>}
-
-      {rows && rows.length === 0 && (
-        <p className="mt-6 text-sm text-muted-foreground italic">
-          No submissions yet. Once you submit a manuscript and an editor records it, it will appear
-          here.
-        </p>
-      )}
-
-      {rows && rows.length > 0 && (
+      {rows.length > 0 && (
         <ul className="mt-6 space-y-3">
           {rows.map((r) => (
             <li key={r.id} className="border border-border bg-card p-4">

@@ -7,38 +7,33 @@ const PUBLIC_LIBRARY_COLUMNS =
 
 export const libraryList = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await supabaseAdmin
-    .from("library_entries")
-    .select(PUBLIC_LIBRARY_COLUMNS)
-    .order("added_at", { ascending: false });
+  const pageSize = 1000;
+  const page = (offset: number) =>
+    supabaseAdmin
+      .from("library_entries")
+      .select(PUBLIC_LIBRARY_COLUMNS)
+      .order("added_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+  let { data, error } = await page(0);
   if (error) {
     console.error("[server] supabase error:", error);
     throw new Error("An unexpected error occurred. Please try again.");
   }
-  const rows = (data ?? []) as Array<{
-    id: string;
-    title: string;
-    authors: string;
-    issue: string | null;
-    topic: string | null;
-    grade: string | null;
-    file_name: string;
-    mime_type: string;
-    file_path: string;
-    added_at: string;
-  }>;
-  return Promise.all(
-    rows.map(async (r) => {
-      const { data: signed, error: signedUrlError } = await supabaseAdmin.storage
-        .from("library")
-        .createSignedUrl(r.file_path, 60 * 60 * 24 * 365);
-      if (signedUrlError || !signed?.signedUrl) {
-        console.error("[server] library signed URL error:", signedUrlError);
-        throw new Error(`Published file is unavailable: ${r.file_name}`);
-      }
-      return { ...r, signed_url: signed.signedUrl };
-    }),
-  );
+  const rows = [...(data ?? [])];
+  for (let offset = pageSize; (data?.length ?? 0) === pageSize; offset += pageSize) {
+    const next = await page(offset);
+    data = next.data;
+    error = next.error;
+    if (error) {
+      console.error("[server] supabase error:", error);
+      throw new Error("An unexpected error occurred. Please try again.");
+    }
+    rows.push(...(data ?? []));
+  }
+  // The public list uses article routes for files. A transient storage signing
+  // error must never make every published entry disappear from the Library.
+  return rows;
 });
 
 const AddSchema = z.object({
@@ -140,24 +135,7 @@ export const libraryRemove = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { verifyStaffToken } = await import("./staff-auth.server");
     verifyStaffToken(data.staffToken);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    const { data: existing } = await supabaseAdmin
-      .from("library_entries")
-      .select("file_path")
-      .eq("id", data.id)
-      .maybeSingle();
-
-    if (existing?.file_path) {
-      await supabaseAdmin.storage.from("library").remove([existing.file_path]);
-    }
-
-    const { error } = await supabaseAdmin.from("library_entries").delete().eq("id", data.id);
-    if (error) {
-      console.error("[server] supabase error:", error);
-      throw new Error("An unexpected error occurred. Please try again.");
-    }
-    return { ok: true as const };
+    throw new Error("Published manuscripts are retained. Contact the journal to correct an entry.");
   });
 
 export const libraryUpdate = createServerFn({ method: "POST" })

@@ -3,15 +3,13 @@ import { createFileRoute } from "@tanstack/react-router";
 /**
  * Refreshes citation counts for every published article from the open
  * scholarly record (OpenAlex, falling back to Crossref).
- * Protected with the staff password as a bearer token; safe to call daily.
+ * Protected with the Vercel cron secret; safe to call daily.
  */
 async function run(request: Request) {
-  const secret = process.env["STAFF_PASSWORD"];
+  const secret = process.env["CRON_SECRET"];
   if (!secret) return new Response("Not configured", { status: 500 });
   const auth = request.headers.get("authorization") ?? "";
-  const url = new URL(request.url);
-  const provided = auth.startsWith("Bearer ") ? auth.slice(7) : (url.searchParams.get("key") ?? "");
-  if (provided !== secret) return new Response("Unauthorized", { status: 401 });
+  if (auth !== `Bearer ${secret}`) return new Response("Unauthorized", { status: 401 });
 
   const { syncCitationCounts } = await import("@/lib/citations.server");
   try {

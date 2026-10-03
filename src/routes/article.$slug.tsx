@@ -2,8 +2,13 @@ import { createFileRoute, notFound, Link } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
-import { getArticleBySlug, incrementCitation, type ArticleRow } from "@/lib/articles.functions";
-import { buildCitationBundle, splitAuthors, type CitationBundle } from "@/lib/citation-formats";
+import { getArticleBySlug, type ArticleRow } from "@/lib/articles.functions";
+import {
+  buildCitationBundle,
+  normalizedDoi,
+  splitAuthors,
+  type CitationBundle,
+} from "@/lib/citation-formats";
 import { generateArticleCitations } from "@/lib/citation-generator.functions";
 
 const SITE_URL = "https://nyrj.org";
@@ -36,6 +41,7 @@ export const Route = createFileRoute("/article/$slug")({
     const pdfUrl = `${SITE_URL}/api/public/article/${params.slug}/pdf`;
     const pubDate = (a.publication_date ?? a.added_at).slice(0, 10);
     const authors = splitAuthors(a.authors);
+    const doi = normalizedDoi(a.doi);
     const descSource = a.abstract ?? `${a.title} by ${a.authors}. Published in ${JOURNAL_TITLE}.`;
     const description = descSource.length > 160 ? descSource.slice(0, 157) + "…" : descSource;
 
@@ -62,7 +68,7 @@ export const Route = createFileRoute("/article/$slug")({
       { name: "citation_language", content: "en" },
       { name: "citation_issn", content: "3143-3030" },
       ...authors.map((author) => ({ name: "citation_author", content: author })),
-      ...(a.doi ? [{ name: "citation_doi", content: a.doi }] : []),
+      ...(doi ? [{ name: "citation_doi", content: doi }] : []),
       ...(a.abstract ? [{ name: "citation_abstract", content: a.abstract }] : []),
       ...(a.keywords && a.keywords.length
         ? [{ name: "citation_keywords", content: a.keywords.join("; ") }]
@@ -82,8 +88,8 @@ export const Route = createFileRoute("/article/$slug")({
       ...(a.abstract ? [{ name: "dc.description", content: a.abstract }] : []),
       ...authors.map((author) => ({ name: "dc.creator", content: author })),
       { name: "dc.identifier", content: url },
-      ...(a.doi ? [{ name: "dc.identifier.doi", content: a.doi }] : []),
-      ...(a.doi ? [{ name: "dc.relation", content: `https://doi.org/${a.doi}` }] : []),
+      ...(doi ? [{ name: "dc.identifier.doi", content: doi }] : []),
+      ...(doi ? [{ name: "dc.relation", content: `https://doi.org/${doi}` }] : []),
     ];
 
     return {
@@ -105,8 +111,8 @@ export const Route = createFileRoute("/article/$slug")({
             inLanguage: "en",
             isAccessibleForFree: true,
             publisher: { "@type": "Organization", name: JOURNAL_TITLE, url: SITE_URL },
-            ...(a.doi
-              ? { identifier: `https://doi.org/${a.doi}`, sameAs: `https://doi.org/${a.doi}` }
+            ...(doi
+              ? { identifier: `https://doi.org/${doi}`, sameAs: `https://doi.org/${doi}` }
               : {}),
             ...(a.issue ? { issueNumber: a.issue } : {}),
             encoding: {
@@ -151,33 +157,24 @@ function ArticlePage() {
   const { data } = useSuspenseQuery(articleQuery(params.slug));
   const a = data as ArticleRow;
   const authors = splitAuthors(a.authors);
+  const doi = normalizedDoi(a.doi);
   const pubDate = (a.publication_date ?? a.added_at).slice(0, 10);
   const pdfHref = `/api/public/article/${a.slug}/pdf`;
   const apaPreview = buildCitationBundle(a).apa;
 
   const [copied, setCopied] = useState(false);
-  const [count, setCount] = useState(a.citation_count ?? 0);
+  const count = a.citation_count ?? 0;
   const [showViewer, setShowViewer] = useState(false);
   const [citations, setCitations] = useState<CitationBundle | null>(null);
   const [citationStyle, setCitationStyle] = useState<keyof CitationBundle>("apa");
   const [citationLoading, setCitationLoading] = useState(false);
   const [citationError, setCitationError] = useState("");
 
-  async function recordCitationUse() {
-    try {
-      const next = await incrementCitation({ data: { id: a.id } });
-      if (typeof next === "number") setCount(next);
-    } catch (err) {
-      console.error("citation count failed:", err);
-    }
-  }
-
   async function handleCopy(value: string) {
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-      await recordCitationUse();
     } catch {
       // Clipboard blocked
     }
@@ -207,7 +204,6 @@ function ArticlePage() {
     link.download = `${a.slug}.${extension}`;
     link.click();
     URL.revokeObjectURL(url);
-    void recordCitationUse();
   }
 
   return (
@@ -226,16 +222,16 @@ function ArticlePage() {
           )}
         </h1>
 
-        {a.doi && (
+        {doi && (
           <p className="mt-2 text-sm text-foreground/80">
             DOI:{" "}
             <a
-              href={`https://doi.org/${a.doi}`}
+              href={`https://doi.org/${doi}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-accent underline underline-offset-2"
             >
-              {a.doi}
+              {doi}
             </a>
           </p>
         )}
@@ -305,7 +301,7 @@ function ArticlePage() {
             Cite This Article
           </button>
           <span className="self-center text-xs text-muted-foreground">
-            Cited {count} {count === 1 ? "time" : "times"}
+            Indexed citations: {count}
           </span>
         </div>
 
