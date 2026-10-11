@@ -255,11 +255,30 @@ export const submitRecommendation = createServerFn({ method: "POST" })
 
     const { data: sub } = await supabaseAdmin
       .from("manuscript_submissions")
-      .select("id, title, initial_reviewer_email")
+      .select("id, title, status, decision, initial_reviewer_email")
       .eq("id", data.submissionId)
       .single();
-    const s = sub as { title: string; initial_reviewer_email: string } | null;
+    const s = sub as {
+      title: string;
+      status: string;
+      decision: string;
+      initial_reviewer_email: string;
+    } | null;
     if (!s) throw new Error("Submission not found.");
+    if (s.decision !== "pending" || s.status === "waiting for edits") {
+      throw new Error("This manuscript is not open for an initial recommendation.");
+    }
+
+    const { data: advanced } = await supabaseAdmin
+      .from("editor_recommendations")
+      .select("id")
+      .eq("submission_id", data.submissionId)
+      .eq("action", "accept")
+      .eq("status", "approved")
+      .limit(1);
+    if (advanced?.length) {
+      throw new Error("This manuscript has already advanced beyond initial review.");
+    }
 
     // An editor may only recommend on manuscripts assigned to them (or ones
     // nobody has been assigned to yet).
@@ -444,21 +463,26 @@ export const resolveRecommendation = createServerFn({ method: "POST" })
         console.error("[server] revision-request workbook sync failed:", syncError);
       }
     } else {
-      const decision = rec.action === "accept" ? "accepted" : "declined";
-      await supabaseAdmin
+      const acceptedForReview = rec.action === "accept";
+      const { error: decisionError } = await supabaseAdmin
         .from("manuscript_submissions")
-        .update({ decision } as never)
+        .update(
+          (acceptedForReview
+            ? { status: "editorial review", decision: "pending" }
+            : { decision: "declined" }) as never,
+        )
         .eq("id", rec.submission_id);
+      if (decisionError) throw new Error("Could not update the manuscript status.");
       try {
         const { sendTemplateEmail } = await import("./email-templates/send-email");
         await sendTemplateEmail("submission-status", sub.submitter_email, {
-          idempotencyKey: `status-${rec.submission_id}-${decision}-${data.id}`,
+          idempotencyKey: `status-${rec.submission_id}-${rec.action}-${data.id}`,
           replyTo: "NYRJINFO@gmail.com",
           templateData: {
             authorName,
             title: sub.title,
-            status: decision === "accepted" ? "publishing" : "declined",
-            decision,
+            status: acceptedForReview ? "editorial review" : "declined",
+            decision: acceptedForReview ? "pending" : "declined",
             note: body,
           },
         });

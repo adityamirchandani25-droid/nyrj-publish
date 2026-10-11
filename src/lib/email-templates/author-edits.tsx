@@ -7,6 +7,7 @@ export interface AuthorEditsProps {
   title?: string;
   body?: string;
   resubmitUrl?: string;
+  hasReviewFile?: boolean;
 }
 
 export function AuthorEditsEmail({
@@ -14,6 +15,7 @@ export function AuthorEditsEmail({
   title = "your manuscript",
   body = "",
   resubmitUrl = "https://nyrj.org/resubmit",
+  hasReviewFile = false,
 }: AuthorEditsProps) {
   return (
     <Html>
@@ -31,6 +33,12 @@ export function AuthorEditsEmail({
             manuscript accordingly.
           </Text>
           <Text style={{ fontSize: "15px", whiteSpace: "pre-wrap", margin: "16px 0" }}>{body}</Text>
+          {hasReviewFile && (
+            <Text style={{ fontSize: "16px", margin: "8px 0" }}>
+              Your reviewer also provided an approved file. Sign in to your submission tracker at
+              nyrj.org/track to download it alongside these comments.
+            </Text>
+          )}
           <Text style={{ fontSize: "16px", margin: "8px 0" }}>
             Whenever you are ready, we would be grateful to receive your revised manuscript within
             the next two weeks so that we can prepare it for our library. Upload it directly to your

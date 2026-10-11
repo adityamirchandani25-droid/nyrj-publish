@@ -318,7 +318,10 @@ function AssignmentCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pending = assignment.recommendation?.status === "pending";
-  const closed = assignment.decision !== "pending";
+  const closed =
+    assignment.decision !== "pending" ||
+    (assignment.recommendation?.action === "accept" &&
+      assignment.recommendation.status === "approved");
   const waitingForRevision = assignment.status === "waiting for edits";
 
   async function submit() {
@@ -400,7 +403,7 @@ function AssignmentCard({
       )}
       {closed && (
         <p className="mt-5 text-sm text-muted-foreground">
-          This manuscript has a final decision and is closed for initial review.
+          This manuscript has completed initial review and is closed at this desk.
         </p>
       )}
 
@@ -414,7 +417,11 @@ function AssignmentCard({
                 onClick={() => setAction(choice)}
                 className={`${secondaryButton} ${action === choice ? "border-primary bg-primary text-primary-foreground" : ""}`}
               >
-                {choice === "formatting" ? "Request revisions" : `Recommend ${choice}`}
+                {choice === "formatting"
+                  ? "Request revisions"
+                  : choice === "accept"
+                    ? "Recommend advancing"
+                    : "Recommend decline"}
               </button>
             ))}
           </div>

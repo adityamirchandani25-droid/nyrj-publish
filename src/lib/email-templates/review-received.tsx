@@ -8,6 +8,7 @@ export interface ReviewReceivedProps {
   title?: string;
   submissionId?: string;
   comments?: string;
+  attachmentName?: string;
 }
 
 export function ReviewReceivedEmail({
@@ -16,6 +17,7 @@ export function ReviewReceivedEmail({
   title = "a manuscript",
   submissionId = "—",
   comments = "",
+  attachmentName = "",
 }: ReviewReceivedProps) {
   return (
     <Html>
@@ -39,6 +41,12 @@ export function ReviewReceivedEmail({
           <Text style={{ fontSize: "15px", whiteSpace: "pre-wrap", margin: "4px 0" }}>
             {comments}
           </Text>
+          {attachmentName && (
+            <Text style={{ fontSize: "15px", margin: "12px 0" }}>
+              Reviewer file: {attachmentName}. Open it in the staff dashboard before approving it
+              for the author.
+            </Text>
+          )}
           <Text style={{ fontSize: "13px", color: "#666", marginTop: "24px" }}>
             Review it in the staff dashboard before forwarding edits to the author.
           </Text>

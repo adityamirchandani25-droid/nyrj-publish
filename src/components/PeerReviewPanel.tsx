@@ -4,6 +4,7 @@ import {
   assignReviewer,
   listAssignments,
   listAuditLog,
+  openReviewFileForStaff,
   resendReviewerInvitation,
   sendEditsToAuthor,
   type AssignmentRow,
@@ -45,6 +46,7 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
   const [busy, setBusy] = useState(false);
   const [editFor, setEditFor] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [includeFile, setIncludeFile] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
   async function load() {
@@ -105,11 +107,16 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
           staffToken: staffToken(),
           assignmentId: a.id,
           body: draft,
+          includeFile,
           sentBy: getSession()?.username ?? "staff",
         },
       });
       setEditFor(null);
-      setNote("Edits emailed to the author.");
+      setNote(
+        includeFile
+          ? "Comments and reviewer file shared with the author."
+          : "Comments emailed to the author.",
+      );
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send the edits.");
@@ -203,6 +210,27 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
                   <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
                     {a.review_comments}
                   </p>
+                  {a.review_file_name && (
+                    <button
+                      className={`${btnGhost} mt-3`}
+                      onClick={async () => {
+                        try {
+                          const { url } = await openReviewFileForStaff({
+                            data: { staffToken: staffToken(), assignmentId: a.id },
+                          });
+                          window.open(url, "_blank", "noopener,noreferrer");
+                        } catch (err) {
+                          setError(
+                            err instanceof Error
+                              ? err.message
+                              : "Could not open the reviewer file.",
+                          );
+                        }
+                      }}
+                    >
+                      Review attached file: {a.review_file_name}
+                    </button>
+                  )}
                   {editFor === a.id ? (
                     <div className="mt-3">
                       <p className={heading}>Review before sending to the author</p>
@@ -212,6 +240,16 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
                         onChange={(e) => setDraft(e.target.value)}
                         maxLength={20000}
                       />
+                      {a.review_file_name && (
+                        <label className="mt-3 flex items-center gap-2 text-sm text-foreground">
+                          <input
+                            type="checkbox"
+                            checked={includeFile}
+                            onChange={(e) => setIncludeFile(e.target.checked)}
+                          />
+                          Share the reviewed file with the author
+                        </label>
+                      )}
                       <div className="mt-2 flex gap-2">
                         <button
                           className={btn}
@@ -230,6 +268,7 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
                       className={`${btn} mt-3`}
                       onClick={() => {
                         setDraft(a.edits_sent_body || a.review_comments);
+                        setIncludeFile(Boolean(a.edits_sent_file_path));
                         setEditFor(a.id);
                       }}
                     >

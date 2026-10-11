@@ -76,6 +76,14 @@ export function AuthorDashboard({ email }: { email: string }) {
                       <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
                         {item.body}
                       </p>
+                      {item.fileUrl && (
+                        <a
+                          href={item.fileUrl}
+                          className="mt-3 inline-block text-sm text-primary underline underline-offset-4"
+                        >
+                          Download reviewer file{item.fileName ? `: ${item.fileName}` : ""}
+                        </a>
+                      )}
                     </li>
                   ))}
                 </ul>

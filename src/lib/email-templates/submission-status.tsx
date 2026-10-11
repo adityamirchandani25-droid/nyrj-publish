@@ -31,8 +31,8 @@ const STATUS_COPY: Record<string, Copy> = {
     body: "Congratulations — your manuscript has moved into the initial peer review stage. One of our peer reviewers is now reading your work for content, methodology, quality, and originality. Please look forward to their feedback; any required edits from our peer reviewers will be sent to you directly via email so you can revise accordingly.",
   },
   "editorial review": {
-    headline: "Your manuscript is with a section editor",
-    body: "Your manuscript has passed the initial peer review and is now with a section editor who has expertise in your field. The editor is reviewing the larger structure, content, and formatting of your paper. Required edits will be emailed to you once this review is complete.",
+    headline: "Your manuscript is moving through editorial review",
+    body: "Your manuscript has passed initial review. Our editors will continue reviewing it, and you will soon receive a peer review. We will share any feedback and requested changes after our editorial team has checked them.",
   },
   "waiting for edits": {
     headline: "Edits are required on your manuscript",
@@ -55,7 +55,7 @@ const STATUS_COPY: Record<string, Copy> = {
 const DECISION_COPY: Record<string, Copy> = {
   accepted: {
     headline: "Congratulations — your manuscript has been accepted",
-    body: "Congratulations! Your manuscript has been accepted to the National Youth Research Journal. Our editorial team will now prepare your paper for final publication, and any remaining formatting or copy edits will be sent to you before it goes live.",
+    body: "Your manuscript has passed initial review and will continue through our editorial process. You will soon receive a peer review. Our editors will check the reviewers' feedback before sharing it with you; acceptance for publication is still subject to the remaining reviews and revisions.",
   },
   declined: {
     headline: "Unfortunately, your manuscript has been declined",

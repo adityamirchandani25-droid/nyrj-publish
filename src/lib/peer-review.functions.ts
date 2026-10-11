@@ -23,8 +23,12 @@ export type AssignmentRow = {
   responded_at: string | null;
   review_comments: string;
   review_submitted_at: string | null;
+  review_file_path: string | null;
+  review_file_name: string | null;
   edits_sent_at: string | null;
   edits_sent_body: string;
+  edits_sent_file_path: string | null;
+  edits_sent_file_name: string | null;
   invite_token: string;
 };
 
@@ -48,7 +52,14 @@ export type ReviewerRow = {
 };
 
 const ASSIGNMENT_COLS =
-  "id, submission_id, reviewer_email, reviewer_name, status, assigned_by, assigned_at, due_at, responded_at, review_comments, review_submitted_at, edits_sent_at, edits_sent_body, invite_token";
+  "id, submission_id, reviewer_email, reviewer_name, status, assigned_by, assigned_at, due_at, responded_at, review_comments, review_submitted_at, review_file_path, review_file_name, edits_sent_at, edits_sent_body, edits_sent_file_path, edits_sent_file_name, invite_token";
+
+const REVIEW_FILE_MIMES: Record<string, string> = {
+  pdf: "application/pdf",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
+const MAX_REVIEW_FILE_BYTES = 8 * 1024 * 1024;
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -252,11 +263,33 @@ export const listAuditLog = createServerFn({ method: "POST" })
     return (rows ?? []) as AuditRow[];
   });
 
+export const openReviewFileForStaff = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => StaffSchema.extend({ assignmentId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const { verifyStaffToken } = await import("./staff-auth.server");
+    verifyStaffToken(data.staffToken);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row } = await supabaseAdmin
+      .from("review_assignments")
+      .select("review_file_path, review_file_name")
+      .eq("id", data.assignmentId)
+      .maybeSingle();
+    if (!row?.review_file_path) throw new Error("No reviewer file is attached.");
+    const { data: signed, error } = await supabaseAdmin.storage
+      .from("submissions")
+      .createSignedUrl(row.review_file_path, 60 * 10, {
+        download: row.review_file_name || "review-feedback",
+      });
+    if (error || !signed) throw new Error("Could not open the reviewer file.");
+    return { url: signed.signedUrl };
+  });
+
 export const sendEditsToAuthor = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
     StaffSchema.extend({
       assignmentId: z.string().uuid(),
       body: z.string().trim().min(1, "Please write the feedback to send.").max(20000),
+      includeFile: z.boolean().optional().default(false),
       sentBy: z.string().trim().max(120).optional().default(""),
     }).parse(d),
   )
@@ -269,10 +302,16 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
 
     const { data: a, error } = await supabaseAdmin
       .from("review_assignments")
-      .select("id, submission_id")
+      .select("id, submission_id, status, review_file_path, review_file_name")
       .eq("id", data.assignmentId)
       .single();
     if (error || !a) throw new Error("Assignment not found.");
+    if (!["review_received", "sent_to_author"].includes(a.status)) {
+      throw new Error("No completed review is ready for staff approval.");
+    }
+    if (data.includeFile && (!a.review_file_path || !a.review_file_name)) {
+      throw new Error("This review has no file to share.");
+    }
     const submissionId = (a as { submission_id: string }).submission_id;
 
     const { data: sub, error: submissionError } = await supabaseAdmin
@@ -318,6 +357,8 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
         status: "sent_to_author",
         edits_sent_at: new Date().toISOString(),
         edits_sent_body: data.body,
+        edits_sent_file_path: data.includeFile ? a.review_file_path : null,
+        edits_sent_file_name: data.includeFile ? a.review_file_name : null,
       } as never)
       .eq("id", data.assignmentId);
     if (saveEditsError) throw new Error("Could not save the requested edits.");
@@ -331,6 +372,7 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
         title: s.title ?? "your manuscript",
         body: data.body,
         resubmitUrl,
+        hasReviewFile: data.includeFile,
       },
     });
 
@@ -345,7 +387,7 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
       submissionId,
       data.sentBy || "staff",
       "Edits emailed to author",
-      `To ${s.submitter_email}`,
+      `To ${s.submitter_email}${data.includeFile ? " · reviewer file approved" : " · comments only"}`,
     );
     return { ok: true };
   });
@@ -515,6 +557,7 @@ export type InviteView = {
   status: string;
   dueAt: string;
   comments: string;
+  reviewFileName: string | null;
   manuscriptFilename: string;
   manuscriptUrl: string | null;
 };
@@ -524,7 +567,9 @@ async function loadInviteByToken(token: string, reviewerToken: string): Promise<
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data: a } = await supabaseAdmin
     .from("review_assignments")
-    .select("id, submission_id, reviewer_email, reviewer_name, status, due_at, review_comments")
+    .select(
+      "id, submission_id, reviewer_email, reviewer_name, status, due_at, review_comments, review_file_name",
+    )
     .eq("invite_token", token)
     .maybeSingle();
   if (!a) throw new Error("This review link is not valid.");
@@ -536,6 +581,7 @@ async function loadInviteByToken(token: string, reviewerToken: string): Promise<
     status: string;
     due_at: string;
     review_comments: string;
+    review_file_name: string | null;
   };
   requireAssignmentOwner(reviewer.email, row.reviewer_email);
   const { data: sub } = await supabaseAdmin
@@ -563,6 +609,7 @@ async function loadInviteByToken(token: string, reviewerToken: string): Promise<
     status: row.status,
     dueAt: row.due_at,
     comments: row.review_comments,
+    reviewFileName: row.review_file_name,
     manuscriptFilename: s.manuscript_filename ?? "manuscript.pdf",
     manuscriptUrl: canReadManuscript
       ? await signedReviewerManuscript(s.manuscript_path, s.manuscript_filename)
@@ -652,10 +699,41 @@ export const respondToInvite = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const createReviewUpload = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) =>
+    ReviewerInviteSchema.extend({ filename: z.string().trim().min(1).max(255) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const reviewer = await requireApprovedReviewer(data.reviewerToken);
+    const extension = data.filename.split(".").pop()?.toLowerCase() ?? "";
+    if (!REVIEW_FILE_MIMES[extension]) {
+      throw new Error("Please choose a PDF or Word document (.pdf, .doc, .docx).");
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: assignment } = await supabaseAdmin
+      .from("review_assignments")
+      .select("id, reviewer_email, status")
+      .eq("invite_token", data.token)
+      .maybeSingle();
+    if (!assignment) throw new Error("This review link is not valid.");
+    requireAssignmentOwner(reviewer.email, assignment.reviewer_email);
+    if (!["accepted", "review_received"].includes(assignment.status)) {
+      throw new Error("This review is no longer open for uploads.");
+    }
+    const path = `review-feedback/${assignment.id}/${crypto.randomUUID()}.${extension}`;
+    const { data: signed, error } = await supabaseAdmin.storage
+      .from("submissions")
+      .createSignedUploadUrl(path);
+    if (error || !signed) throw new Error("Could not prepare the file upload.");
+    return { path, token: signed.token };
+  });
+
 export const submitReview = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
     ReviewerInviteSchema.extend({
       comments: z.string().trim().min(1, "Please enter your review.").max(20000),
+      filePath: z.string().max(500).optional(),
+      fileName: z.string().trim().max(255).optional(),
     }).parse(d),
   )
   .handler(async ({ data }) => {
@@ -664,7 +742,7 @@ export const submitReview = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: a } = await supabaseAdmin
       .from("review_assignments")
-      .select("id, submission_id, reviewer_email, reviewer_name, status")
+      .select("id, submission_id, reviewer_email, reviewer_name, status, review_file_name")
       .eq("invite_token", data.token)
       .maybeSingle();
     if (!a) throw new Error("This review link is not valid.");
@@ -674,10 +752,34 @@ export const submitReview = createServerFn({ method: "POST" })
       reviewer_email: string;
       reviewer_name: string;
       status: string;
+      review_file_name: string | null;
     };
     requireAssignmentOwner(reviewer.email, row.reviewer_email);
     if (!["accepted", "review_received"].includes(row.status)) {
       throw new Error("Accept this review invitation before submitting your review.");
+    }
+
+    let reviewFile: { review_file_path: string; review_file_name: string } | null = null;
+    if (data.filePath || data.fileName) {
+      const extension = data.fileName?.split(".").pop()?.toLowerCase() ?? "";
+      if (
+        !data.filePath ||
+        !data.fileName ||
+        !REVIEW_FILE_MIMES[extension] ||
+        !new RegExp(`^review-feedback/${row.id}/[0-9a-f-]+\\.${extension}$`).test(data.filePath)
+      ) {
+        throw new Error("The review attachment is not valid.");
+      }
+      const { data: blob, error: downloadError } = await supabaseAdmin.storage
+        .from("submissions")
+        .download(data.filePath);
+      if (downloadError || !blob)
+        throw new Error("The review attachment did not upload. Please try again.");
+      if (blob.size > MAX_REVIEW_FILE_BYTES) {
+        await supabaseAdmin.storage.from("submissions").remove([data.filePath]);
+        throw new Error("The review attachment must be 8 MB or smaller.");
+      }
+      reviewFile = { review_file_path: data.filePath, review_file_name: data.fileName };
     }
 
     const { data: updated, error: updateError } = await supabaseAdmin
@@ -686,6 +788,7 @@ export const submitReview = createServerFn({ method: "POST" })
         status: "review_received",
         review_comments: data.comments,
         review_submitted_at: new Date().toISOString(),
+        ...(reviewFile ?? {}),
       } as never)
       .eq("id", row.id)
       .in("status", ["accepted", "review_received"])
@@ -711,6 +814,7 @@ export const submitReview = createServerFn({ method: "POST" })
           title: (sub as { title?: string } | null)?.title ?? "",
           submissionId: row.submission_id,
           comments: data.comments,
+          attachmentName: reviewFile?.review_file_name ?? row.review_file_name ?? "",
         },
       }));
       await audit(row.submission_id, row.reviewer_email, "Review submitted", "Emailed to editors");
@@ -746,7 +850,9 @@ export const listMyAssignments = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows } = await supabaseAdmin
       .from("review_assignments")
-      .select("id, submission_id, invite_token, reviewer_name, status, due_at, review_comments")
+      .select(
+        "id, submission_id, invite_token, reviewer_name, status, due_at, review_comments, review_file_name",
+      )
       .eq("reviewer_email", reviewer.email)
       .order("assigned_at", { ascending: false })
       .limit(200);
@@ -759,6 +865,7 @@ export const listMyAssignments = createServerFn({ method: "POST" })
       status: string;
       due_at: string;
       review_comments: string;
+      review_file_name: string | null;
     }>;
     if (list.length === 0) return [];
 
@@ -804,6 +911,7 @@ export const listMyAssignments = createServerFn({ method: "POST" })
           status: x.status,
           dueAt: x.due_at,
           comments: x.review_comments,
+          reviewFileName: x.review_file_name,
           manuscriptFilename: s?.manuscript_filename ?? "manuscript.pdf",
           manuscriptUrl: canReadManuscript
             ? await signedReviewerManuscript(s?.manuscript_path, s?.manuscript_filename)

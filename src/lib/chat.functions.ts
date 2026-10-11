@@ -103,7 +103,7 @@ If someone clearly needs a real person (a complaint, a sensitive or account-spec
 About NYRJ:
 - A peer-reviewed academic journal that publishes research by young researchers of any and all ages.
 - ISSN 3143-3030. Fiscally sponsored under a 501(c)(3) nonprofit.
-- Editorial process: Reviewer → Section Editor → Author revisions → Copy Editor → Publishing.
+- Editorial process: Initial review → Section Editor → Author revisions → Copy Editor → Peer Review → final revision if needed → Publishing. Editorial staff approves reviewer comments and files before authors receive them.
 - Turnaround (median): 1 week to first response, 2 weeks to first peer review, 4.5 weeks to final publishing.
 - Submissions go through the on-site form (no Google Forms). A student account is required.
 - Manuscript formats: .doc, .docx, .pdf. Published papers get a permanent /article/<slug> URL based on the paper title.

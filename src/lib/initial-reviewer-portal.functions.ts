@@ -440,6 +440,17 @@ export const submitInitialReview = createServerFn({ method: "POST" })
       throw new Error("This manuscript is waiting for the author's revised PDF.");
     }
 
+    const { data: advanced } = await supabaseAdmin
+      .from("editor_recommendations")
+      .select("id")
+      .eq("submission_id", data.submissionId)
+      .eq("action", "accept")
+      .eq("status", "approved")
+      .limit(1);
+    if (advanced?.length) {
+      throw new Error("This manuscript has already advanced beyond initial review.");
+    }
+
     const { data: pending } = await supabaseAdmin
       .from("editor_recommendations")
       .select("id")

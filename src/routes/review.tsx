@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
+import { supabase } from "@/integrations/supabase/client";
 import {
+  createReviewUpload,
   getInvite,
   getReviewerWorkflow,
   registerReviewer,
@@ -68,6 +70,20 @@ const btn =
 const btnGhost =
   "px-5 py-2.5 border border-border text-primary text-xs uppercase tracking-[0.2em] hover:border-accent transition disabled:opacity-50";
 
+async function uploadReviewFile(file: File | null, token: string, reviewerToken: string) {
+  if (!file) return {};
+  if (!/\.(pdf|doc|docx)$/i.test(file.name)) {
+    throw new Error("Choose a PDF or Word document (.pdf, .doc, .docx).");
+  }
+  if (file.size > 8 * 1024 * 1024) throw new Error("The file must be 8 MB or smaller.");
+  const signed = await createReviewUpload({ data: { token, reviewerToken, filename: file.name } });
+  const { error } = await supabase.storage
+    .from("submissions")
+    .uploadToSignedUrl(signed.path, signed.token, file);
+  if (error) throw new Error(`Could not upload the reviewer file: ${error.message}`);
+  return { filePath: signed.path, fileName: file.name };
+}
+
 function statusText(s: string) {
   switch (s) {
     case "invited":
@@ -114,6 +130,7 @@ function InvitePanel({ token, session }: { token: string; session: ReviewerSessi
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [comments, setComments] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [touched, setTouched] = useState(false);
   const [done, setDone] = useState<string | null>(null);
 
@@ -165,7 +182,9 @@ function InvitePanel({ token, session }: { token: string; session: ReviewerSessi
     setBusy(true);
     setError(null);
     try {
-      await submitReview({ data: { token, reviewerToken: session.token, comments } });
+      const uploaded = await uploadReviewFile(file, token, session.token);
+      await submitReview({ data: { token, reviewerToken: session.token, comments, ...uploaded } });
+      setFile(null);
       setDone("Thank you — your review has been sent to our editorial team.");
       await load();
     } catch (err) {
@@ -254,6 +273,22 @@ function InvitePanel({ token, session }: { token: string; session: ReviewerSessi
             maxLength={20000}
             placeholder="Summary, strengths, specific edits, and your recommendation…"
           />
+          <label className="mt-4 block text-sm text-primary" htmlFor="invite-review-file">
+            Optional annotated file for the author
+          </label>
+          <input
+            id="invite-review-file"
+            type="file"
+            accept=".pdf,.doc,.docx"
+            className={`${input} mt-1`}
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            PDF or Word, up to 8 MB. Editors review the file and comments before sharing them.
+          </p>
+          {invite.reviewFileName && !file && (
+            <p className="mt-1 text-xs text-muted-foreground">Attached: {invite.reviewFileName}</p>
+          )}
           {done && <p className="mt-3 text-sm text-accent">{done}</p>}
           {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
           <button className={`${btn} mt-4`} disabled={busy || !comments.trim()}>
@@ -639,6 +674,7 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [workflowUrl, setWorkflowUrl] = useState<string | null>(null);
@@ -677,9 +713,11 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
     setBusy(true);
     setNote(null);
     try {
+      const uploaded = await uploadReviewFile(file, row.token, session.token);
       await submitReview({
-        data: { token: row.token, reviewerToken: session.token, comments: draft },
+        data: { token: row.token, reviewerToken: session.token, comments: draft, ...uploaded },
       });
+      setFile(null);
       setNote("Thank you — your review was sent to our editorial team.");
       setOpenId(null);
       await load();
@@ -775,6 +813,28 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
                       onChange={(e) => setDraft(e.target.value)}
                       maxLength={20000}
                     />
+                    <label
+                      className="mt-3 block text-sm text-primary"
+                      htmlFor={`review-file-${r.assignmentId}`}
+                    >
+                      Optional annotated file for the author
+                    </label>
+                    <input
+                      id={`review-file-${r.assignmentId}`}
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      className={input}
+                      onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      PDF or Word, up to 8 MB. Editors approve comments and files before sharing
+                      them.
+                    </p>
+                    {r.reviewFileName && !file && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Attached: {r.reviewFileName}
+                      </p>
+                    )}
                     <div className="mt-3 flex gap-3">
                       <button
                         className={btn}
@@ -793,6 +853,7 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
                     className={btn}
                     onClick={() => {
                       setDraft(r.comments || "");
+                      setFile(null);
                       setOpenId(r.assignmentId);
                     }}
                   >

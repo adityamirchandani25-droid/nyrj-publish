@@ -6,6 +6,8 @@ export type AuthorFeedback = {
   body: string;
   sentAt: string;
   source: "Peer review" | "Editorial review";
+  fileName: string | null;
+  fileUrl: string | null;
 };
 
 export type AuthorManuscript = {
@@ -51,7 +53,9 @@ export const getAuthorDashboard = createServerFn({ method: "GET" })
     const [reviews, recommendations, versions] = await Promise.all([
       supabaseAdmin
         .from("review_assignments")
-        .select("id, submission_id, edits_sent_at, edits_sent_body")
+        .select(
+          "id, submission_id, edits_sent_at, edits_sent_body, edits_sent_file_path, edits_sent_file_name",
+        )
         .in("submission_id", ids)
         .not("edits_sent_at", "is", null),
       supabaseAdmin
@@ -69,6 +73,20 @@ export const getAuthorDashboard = createServerFn({ method: "GET" })
       throw new Error("Your edit history could not be loaded. Please try again.");
     }
 
+    const signedFiles = new Map<string, string>();
+    await Promise.all(
+      (reviews.data ?? [])
+        .filter((r) => r.edits_sent_file_path)
+        .map(async (r) => {
+          const { data: signed } = await supabaseAdmin.storage
+            .from("submissions")
+            .createSignedUrl(r.edits_sent_file_path!, 60 * 10, {
+              download: r.edits_sent_file_name || "review-feedback",
+            });
+          if (signed?.signedUrl) signedFiles.set(r.id, signed.signedUrl);
+        }),
+    );
+
     return papers.map((paper) => {
       const feedback: AuthorFeedback[] = [
         ...(reviews.data ?? [])
@@ -80,6 +98,8 @@ export const getAuthorDashboard = createServerFn({ method: "GET" })
             body: row.edits_sent_body,
             sentAt: row.edits_sent_at!,
             source: "Peer review" as const,
+            fileName: row.edits_sent_file_name,
+            fileUrl: signedFiles.get(row.id) ?? null,
           })),
         ...(recommendations.data ?? [])
           .filter((row) => row.submission_id === paper.id && row.reviewed_at)
@@ -88,6 +108,8 @@ export const getAuthorDashboard = createServerFn({ method: "GET" })
             body: row.staff_message?.trim() || row.comments,
             sentAt: row.reviewed_at!,
             source: "Editorial review" as const,
+            fileName: null,
+            fileUrl: null,
           })),
       ]
         .filter((item) => item.body.trim())

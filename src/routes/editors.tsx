@@ -8,7 +8,7 @@ export const Route = createFileRoute("/editors")({
       {
         name: "description",
         content:
-          "How NYRJ peer review works: initial reviewer, section editor, author revision, and copy editor — plus how to apply as an editor.",
+          "How NYRJ manuscripts move through initial review, section editing, author revision, copy editing, and peer review — plus how to apply as an editor.",
       },
       { property: "og:title", content: "NYRJ Peer Review & Editing Process" },
       {
@@ -63,8 +63,12 @@ function Editors() {
                 body: "The paper is forwarded to a copy editor (or returned to the author) for careful proofreading. The copy editor corrects grammar, spelling, minor formatting issues, and any remaining inconsistencies.",
               },
               {
+                title: "Peer Review",
+                body: "After copy editing, peer reviewers assess the manuscript and send comments or an annotated file to our editors. The editorial team reviews the feedback before sharing approved comments and files with the author for any needed revision.",
+              },
+              {
                 title: "Final Revision or Publishing",
-                body: "After the copy editor's pass, the manuscript either goes back to the author for a final revision or moves directly into publishing, where it is released to the public Library.",
+                body: "After peer review, the manuscript may go back to the author for a final revision. Once all reviews and revisions are complete, it moves into publishing and is released to the public Library.",
               },
             ]}
           />

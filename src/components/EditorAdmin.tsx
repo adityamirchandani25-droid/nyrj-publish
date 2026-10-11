@@ -16,7 +16,7 @@ const btnGhost =
   "px-3 py-1.5 border border-border text-[11px] uppercase tracking-[0.18em] hover:bg-muted disabled:opacity-50";
 
 const ACTION_LABEL: Record<string, string> = {
-  accept: "Recommends accepting",
+  accept: "Recommends advancing to peer review",
   decline: "Recommends declining",
   formatting: "Requests revisions from the author",
 };
