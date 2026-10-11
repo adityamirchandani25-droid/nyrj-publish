@@ -6,6 +6,7 @@ import {
   bridgeSupabaseSession,
   getSession,
   isResearcher,
+  loginDeveloper,
   loginStaff,
   logout,
   onAuthChange,
@@ -39,11 +40,12 @@ export const Route = createFileRoute("/login")({
       account:
         search.account === "student" ||
         search.account === "staff" ||
-        search.account === "ambassador"
+        search.account === "ambassador" ||
+        search.account === "developer"
           ? search.account
           : undefined,
       mode: search.mode === "signup" ? "signup" : undefined,
-    }) as { account?: "student" | "staff" | "ambassador"; mode?: "signup" },
+    }) as { account?: "student" | "staff" | "ambassador" | "developer"; mode?: "signup" },
   head: () => ({
     meta: [
       { title: "Log In — NYRJ" },
@@ -80,7 +82,9 @@ function LoginPage() {
         ? "staff"
         : search.account === "ambassador"
           ? "ambassador"
-          : null;
+          : search.account === "developer"
+            ? "developer"
+            : null;
   const [role, setRole] = useState<Role | null>(searchRole);
   const [current, setCurrent] = useState<Session | null>(null);
   const [oauthError, setOauthError] = useState<string | null>(null);
@@ -129,6 +133,14 @@ function LoginPage() {
             <span className="text-accent uppercase tracking-[0.2em] text-xs">{current.role}</span>.
           </p>
           <div className="mt-6 flex gap-4">
+            {current.role === "developer" && (
+              <button
+                onClick={() => navigate({ to: "/tools" })}
+                className="px-5 py-2.5 bg-primary text-primary-foreground text-xs uppercase tracking-[0.2em] hover:bg-accent transition"
+              >
+                Open Tools
+              </button>
+            )}
             <button
               onClick={() => navigate({ to: "/" })}
               className="px-5 py-2.5 bg-primary text-primary-foreground text-xs uppercase tracking-[0.2em] hover:bg-accent transition"
@@ -244,6 +256,12 @@ function LoginPage() {
         {role === "staff" && (
           <StaffForm onBack={() => chooseRole(null)} onSuccess={() => navigate({ to: "/" })} />
         )}
+        {role === "developer" && (
+          <DeveloperForm
+            onBack={() => chooseRole(null)}
+            onSuccess={() => navigate({ to: "/tools" })}
+          />
+        )}
         {role === "researcher" && (
           <StudentOtpForm
             onBack={() => chooseRole(null)}
@@ -328,6 +346,53 @@ function StaffForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
           type="button"
           onClick={onBack}
           className="text-xs text-muted-foreground hover:text-accent underline underline-offset-4"
+        >
+          ← Choose a different login
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function DeveloperForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await loginDeveloper(password);
+      if (result.ok) onSuccess();
+      else setError(result.error);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-10 max-w-md space-y-4 border border-border bg-card p-6">
+      <p className="text-[10px] uppercase tracking-[0.25em] text-accent">Developer Login</p>
+      <FieldRow
+        label="Developer Password"
+        type="password"
+        value={password}
+        onChange={setPassword}
+      />
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <div className="flex items-center gap-4">
+        <button
+          disabled={busy || !password}
+          className="bg-primary px-5 py-2.5 text-xs uppercase tracking-[0.2em] text-primary-foreground transition hover:bg-accent disabled:opacity-50"
+        >
+          {busy ? "Signing in…" : "Open Tools"}
+        </button>
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-xs text-muted-foreground underline underline-offset-4 hover:text-accent"
         >
           ← Choose a different login
         </button>

@@ -15,6 +15,8 @@ const secretNames = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "SENDGRID_API_KEY",
   "STAFF_PASSWORD",
+  "DEVELOPER_PASSWORD",
+  "DEVELOPER_SESSION_SECRET",
   "AMBASSADOR_PASSWORD",
   "INITIAL_REVIEWER_ACCESS_CODE",
   "OPENAI_API_KEY",
@@ -29,6 +31,7 @@ const secretNames = [
 const forbiddenClientMarkers = [
   ...secretNames,
   "process.env",
+  "SOFTWARENYRJ",
   "api.openai.com",
   "api.sendgrid.com",
   "graph.microsoft.com",

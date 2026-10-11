@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState, type FormEvent } from "react";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 import { Sparkles, X, Send } from "lucide-react";
 import { chatAssistant } from "@/lib/chat.functions";
+import { verifyDeveloperCode } from "@/lib/developer-auth.functions";
+import { getSession, isDeveloper } from "@/lib/auth";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -17,9 +20,26 @@ const SUGGESTIONS = [
   "How do I talk to a human?",
 ];
 
+function recentConversation(messages: Msg[]): Msg[] {
+  const maxMessages = 8;
+  const maxCharacters = 6000;
+  const recent: Msg[] = [];
+  let characters = 0;
+  for (let index = messages.length - 1; index >= 0 && recent.length < maxMessages; index--) {
+    const message = messages[index];
+    if (characters + message.content.length > maxCharacters) break;
+    recent.unshift(message);
+    characters += message.content.length;
+  }
+  return recent;
+}
+
 export function ChatbotPopup() {
+  const navigate = useNavigate();
+  const pathname = useLocation({ select: (location) => location.pathname });
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([INTRO]);
+  const [conversation, setConversation] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,17 +52,39 @@ export function ChatbotPopup() {
 
   async function ask(text: string) {
     if (!text || busy) return;
-    const next: Msg[] = [...messages, { role: "user", content: text }];
-    setMessages(next);
     setInput("");
-    setBusy(true);
     setError(null);
+    if (text.toLowerCase() === "/tools") {
+      if (isDeveloper(getSession())) {
+        setOpen(false);
+        void navigate({ to: "/tools" });
+      } else {
+        setError("Enter the developer code in Ask Sage to open the login.");
+      }
+      return;
+    }
+    setBusy(true);
     try {
-      const payload = next
-        .filter((m) => m !== INTRO)
-        .slice(-8)
-        .map((m) => ({ role: m.role, content: m.content }));
+      // The code is checked on the server and never included in the client bundle.
+      if (/^[A-Z]{12}$/.test(text)) {
+        const result = await verifyDeveloperCode({ data: { text } });
+        if (result.matched) {
+          setOpen(false);
+          void navigate({ to: "/login", search: { account: "developer" } });
+          return;
+        }
+      }
+
+      const nextConversation: Msg[] = [...conversation, { role: "user", content: text }];
+      setMessages((cur) => [...cur, { role: "user", content: text }]);
+      const payload = recentConversation(nextConversation).map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
       const { reply } = await chatAssistant({ data: { messages: payload } });
+      setConversation(
+        recentConversation([...nextConversation, { role: "assistant", content: reply }]),
+      );
       setMessages((cur) => [...cur, { role: "assistant", content: reply }]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong.";
@@ -56,6 +98,8 @@ export function ChatbotPopup() {
     e.preventDefault();
     void ask(input.trim());
   }
+
+  if (pathname === "/tools") return null;
 
   return (
     <>

@@ -4,12 +4,13 @@
 //   server function that verifies it against process.env.STAFF_PASSWORD and
 //   returns a signed, expiring token. The password itself never lives in the
 //   client bundle and is never stored in the browser.
-// Both surface through the same Session type so the existing UI keeps working.
+// These login types share the same Session type so the existing UI keeps working.
 
 import { supabase } from "@/integrations/supabase/client";
 import { staffLogin } from "@/lib/staff-auth.functions";
+import { developerLogin } from "@/lib/developer-auth.functions";
 
-export type Role = "researcher" | "staff" | "ambassador";
+export type Role = "researcher" | "staff" | "ambassador" | "developer";
 
 export type Session = {
   role: Role;
@@ -17,6 +18,8 @@ export type Session = {
   loggedInAt: number;
   staffToken?: string;
   staffTokenExpiresAt?: number;
+  developerToken?: string;
+  developerTokenExpiresAt?: number;
   // For ambassador role only: the shared password. Not a secret (user-chosen
   // memorable code); stored so the client can pass it to gated server fns.
   ambassadorPassword?: string;
@@ -50,7 +53,11 @@ export function getSession(): Session | null {
     if (!raw) return null;
     const s = JSON.parse(raw) as Session;
     // Auto-expire staff sessions whose signed token has elapsed.
-    if (s.role === "staff" && s.staffTokenExpiresAt && Date.now() > s.staffTokenExpiresAt) {
+    if (
+      (s.role === "staff" && s.staffTokenExpiresAt && Date.now() > s.staffTokenExpiresAt) ||
+      (s.role === "developer" &&
+        (!s.developerToken || !s.developerTokenExpiresAt || Date.now() > s.developerTokenExpiresAt))
+    ) {
       window.localStorage.removeItem(KEY);
       return null;
     }
@@ -97,6 +104,36 @@ export async function loginStaff(
 
 export function isStaff(s: Session | null): boolean {
   return s?.role === "staff";
+}
+
+export async function loginDeveloper(
+  password: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { token, expiresAt } = await developerLogin({ data: { password } });
+    writeSession({
+      role: "developer",
+      username: "Developer",
+      loggedInAt: Date.now(),
+      developerToken: token,
+      developerTokenExpiresAt: expiresAt,
+    });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: loginErrorMessage(error, "Developer login failed.") };
+  }
+}
+
+export function isDeveloper(s: Session | null): boolean {
+  return s?.role === "developer";
+}
+
+export function developerToken(): string {
+  const session = getSession();
+  if (!isDeveloper(session) || !session?.developerToken) {
+    throw new Error("Developer session expired. Please sign in again.");
+  }
+  return session.developerToken;
 }
 
 export function isResearcher(s: Session | null): boolean {
@@ -261,9 +298,19 @@ export function bridgeSupabaseSession() {
     const current = getSession();
     if (user?.email) {
       // Don't overwrite one of the app's separate privileged/shared sessions.
-      if (current?.role === "staff" || current?.role === "ambassador") return;
+      if (
+        current?.role === "staff" ||
+        current?.role === "ambassador" ||
+        current?.role === "developer"
+      )
+        return;
       await ensureProfile(user);
-      if (getSession()?.role === "staff" || getSession()?.role === "ambassador") return;
+      if (
+        getSession()?.role === "staff" ||
+        getSession()?.role === "ambassador" ||
+        getSession()?.role === "developer"
+      )
+        return;
       if (current?.role === "researcher" && current.username === user.email) return;
       writeSession({ role: "researcher", username: user.email, loggedInAt: Date.now() });
     } else if (current?.role === "researcher") {

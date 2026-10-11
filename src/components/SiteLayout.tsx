@@ -143,6 +143,7 @@ function Header() {
           {session?.role === "ambassador" && (
             <NavItem to="/ambassador">Ambassador · Dashboard</NavItem>
           )}
+          {session?.role === "developer" && <NavItem to="/tools">Developer · Tools</NavItem>}
         </div>
       </nav>
     </header>

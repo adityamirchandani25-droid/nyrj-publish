@@ -31,6 +31,7 @@ import { Route as ReviewRouteImport } from './routes/review'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as TeamRouteImport } from './routes/team'
+import { Route as ToolsRouteImport } from './routes/tools'
 import { Route as TrackRouteImport } from './routes/track'
 import { Route as AdminChaptersRouteImport } from './routes/admin.chapters'
 import { Route as AdminSubmissionsRouteImport } from './routes/admin.submissions'
@@ -155,6 +156,11 @@ const TeamRoute = TeamRouteImport.update({
   path: '/team',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ToolsRoute = ToolsRouteImport.update({
+  id: '/tools',
+  path: '/tools',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TrackRoute = TrackRouteImport.update({
   id: '/track',
   path: '/track',
@@ -248,6 +254,7 @@ export interface FileRoutesByFullPath {
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/team': typeof TeamRoute
+  '/tools': typeof ToolsRoute
   '/track': typeof TrackRoute
   '/admin/chapters': typeof AdminChaptersRoute
   '/admin/submissions': typeof AdminSubmissionsRoute
@@ -285,6 +292,7 @@ export interface FileRoutesByTo {
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/team': typeof TeamRoute
+  '/tools': typeof ToolsRoute
   '/track': typeof TrackRoute
   '/admin/chapters': typeof AdminChaptersRoute
   '/admin/submissions': typeof AdminSubmissionsRoute
@@ -323,6 +331,7 @@ export interface FileRoutesById {
   '/search': typeof SearchRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/team': typeof TeamRoute
+  '/tools': typeof ToolsRoute
   '/track': typeof TrackRoute
   '/admin/chapters': typeof AdminChaptersRoute
   '/admin/submissions': typeof AdminSubmissionsRoute
@@ -362,6 +371,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/sitemap.xml'
     | '/team'
+    | '/tools'
     | '/track'
     | '/admin/chapters'
     | '/admin/submissions'
@@ -399,6 +409,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/sitemap.xml'
     | '/team'
+    | '/tools'
     | '/track'
     | '/admin/chapters'
     | '/admin/submissions'
@@ -436,6 +447,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/sitemap.xml'
     | '/team'
+    | '/tools'
     | '/track'
     | '/admin/chapters'
     | '/admin/submissions'
@@ -474,6 +486,7 @@ export interface RootRouteChildren {
   SearchRoute: typeof SearchRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TeamRoute: typeof TeamRoute
+  ToolsRoute: typeof ToolsRoute
   TrackRoute: typeof TrackRoute
   AdminChaptersRoute: typeof AdminChaptersRoute
   AdminSubmissionsRoute: typeof AdminSubmissionsRoute
@@ -644,6 +657,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TeamRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tools': {
+      id: '/tools'
+      path: '/tools'
+      fullPath: '/tools'
+      preLoaderRoute: typeof ToolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/track': {
       id: '/track'
       path: '/track'
@@ -773,6 +793,7 @@ const rootRouteChildren: RootRouteChildren = {
   SearchRoute: SearchRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   TeamRoute: TeamRoute,
+  ToolsRoute: ToolsRoute,
   TrackRoute: TrackRoute,
   AdminChaptersRoute: AdminChaptersRoute,
   AdminSubmissionsRoute: AdminSubmissionsRoute,

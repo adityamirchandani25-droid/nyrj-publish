@@ -22,7 +22,10 @@ function requestIp(): string {
 }
 
 function rateLimitSecret(): string {
-  const secret = process.env.RATE_LIMIT_SECRET?.trim() || process.env.STAFF_PASSWORD?.trim();
+  const secret =
+    process.env.RATE_LIMIT_SECRET?.trim() ||
+    process.env.STAFF_PASSWORD?.trim() ||
+    process.env.DEVELOPER_SESSION_SECRET?.trim();
   if (!secret) throw new Error("Server rate limiting is not configured.");
   return secret;
 }
