@@ -41,10 +41,12 @@ export const Route = createFileRoute("/metrics")({
 function MetricsPage() {
   const { data: stats } = useSuspenseQuery(statsQuery);
   const down = (stats as { unavailable?: boolean }).unavailable === true;
-  // Never publish a hard zero we can't stand behind: if the figure is
-  // genuinely zero (or unreadable right now), show an em dash instead.
+  // Use a dash for unavailable figures; citation zero is a meaningful
+  // reported count, so it has a separate formatter below.
   const num = (n: number | null | undefined) =>
     down || n == null || !Number.isFinite(n) || n === 0 ? "—" : n.toLocaleString();
+  const numOrZero = (n: number | null | undefined) =>
+    down || n == null || !Number.isFinite(n) ? "—" : n.toLocaleString();
   const dec = (n: number | null | undefined) =>
     down || n == null || !Number.isFinite(n) ? "—" : n.toFixed(2);
 
@@ -129,12 +131,13 @@ function MetricsPage() {
 
         <h2 className="font-serif text-3xl text-primary mt-16">Citation impact.</h2>
         <p className="mt-3 text-muted-foreground max-w-2xl">
-          Citation counts are fetched for articles with DOIs from OpenAlex, with Crossref as a
-          fallback. Indexing can lag publication, and articles without DOIs are not monitored.
+          Citation counts are fetched for articles with DOIs from OpenAlex and Crossref. We use the
+          larger reported count to avoid double-counting. Indexing can lag publication, and articles
+          without DOIs are not monitored.
         </p>
 
         <div className="mt-8 border border-border bg-card p-6">
-          <p className="font-serif text-4xl text-primary">{num(stats.citations)}</p>
+          <p className="font-serif text-4xl text-primary">{numOrZero(stats.citations)}</p>
           <p className="mt-2 text-[11px] uppercase tracking-[0.2em] text-accent">
             Indexed citations
           </p>
