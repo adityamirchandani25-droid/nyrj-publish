@@ -61,6 +61,8 @@ function AdminSubmissions() {
 
   useEffect(() => {
     setSession(getSession());
+    const reviewId = new URLSearchParams(window.location.search).get("review");
+    if (reviewId && /^[0-9a-f-]{36}$/i.test(reviewId)) setReviewFor(reviewId);
     return onAuthChange(setSession);
   }, []);
 

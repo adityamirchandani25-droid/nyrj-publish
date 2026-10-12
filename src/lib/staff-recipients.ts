@@ -4,3 +4,6 @@ export const MASTER_STAFF_EMAILS = [
   "Madhavarora529@gmail.com",
   "Anirudh.Budumuru@gmail.com",
 ] as const;
+
+/** Reviewer follow-up updates also go to the journal mailbox. */
+export const REVIEW_FOLLOWUP_STAFF_EMAILS = ["NYRJINFO@gmail.com", ...MASTER_STAFF_EMAILS] as const;

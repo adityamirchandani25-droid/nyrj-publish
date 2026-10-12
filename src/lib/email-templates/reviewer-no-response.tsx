@@ -24,15 +24,16 @@ export function ReviewerNoResponseEmail({
   return (
     <Html>
       <Head />
-      <Preview>A peer-review deadline passed without a completed review</Preview>
+      <Preview>A peer-review deadline passed without a recorded decision or review</Preview>
       <Body style={{ backgroundColor: "#f6f7f9", fontFamily: "Georgia, serif", margin: 0 }}>
         <Container style={{ backgroundColor: "#ffffff", padding: "32px", maxWidth: "600px" }}>
           <Heading style={{ fontSize: "22px", margin: "0 0 16px" }}>
             Peer-review deadline passed
           </Heading>
           <Text style={{ fontSize: "16px", margin: "8px 0" }}>
-            No completed peer review was received within the 15-day review window. Please open the
-            paper and assign another reviewer.
+            No acceptance, decline, or completed peer review was recorded within the 15-day review
+            window. Please check the paper, including any email replies, before assigning another
+            reviewer.
           </Text>
           <Text style={{ fontSize: "16px", margin: "4px 0" }}>
             <strong>Manuscript:</strong> {title}
@@ -47,7 +48,7 @@ export function ReviewerNoResponseEmail({
             <strong>What happened:</strong>{" "}
             {acceptedInvitation
               ? "The invitation was accepted, but no review was submitted."
-              : "The reviewer did not respond to the invitation."}
+              : "No acceptance or decline was recorded for the invitation."}
           </Text>
           {dueDate ? (
             <Text style={{ fontSize: "16px", margin: "4px 0" }}>

@@ -1,10 +1,11 @@
 // Citation tracking for NYRJ.
 //
 // Articles with DOIs can be looked up in scholarly indexes. We read them from
-// OpenAlex and fall back to Crossref's "is-referenced-by-count" when it has no record
-// or reports zero citations
-// of the DOI yet. The resulting number is stored on library_entries.citation_count
-// so the public metrics page and article pages can display it instantly.
+// OpenAlex and Crossref can index different subsets of citations. We use the
+// larger independently reported count as an indexed lower bound, never their
+// sum (which would double-count citations present in both indexes).
+// The resulting number is stored on library_entries.citation_count so the
+// public metrics page and article pages can display it instantly.
 
 const UA = "NYRJ-citation-sync (https://nyrj.org; mailto:NYRJINFO@gmail.com)";
 
@@ -19,7 +20,9 @@ async function openAlexCount(doi: string): Promise<number | null> {
     );
     if (!res.ok) return null;
     const json = (await res.json()) as { cited_by_count?: number };
-    return typeof json.cited_by_count === "number" ? json.cited_by_count : null;
+    return Number.isSafeInteger(json.cited_by_count) && json.cited_by_count! >= 0
+      ? json.cited_by_count!
+      : null;
   } catch {
     return null;
   }
@@ -36,7 +39,7 @@ async function crossrefCount(doi: string): Promise<number | null> {
       message?: { "is-referenced-by-count"?: number };
     };
     const n = json.message?.["is-referenced-by-count"];
-    return typeof n === "number" ? n : null;
+    return Number.isSafeInteger(n) && n! >= 0 ? n! : null;
   } catch {
     return null;
   }
@@ -95,8 +98,9 @@ export async function syncCitationCounts(): Promise<CitationSyncResult> {
       continue;
     }
     checked += 1;
-    const openAlex = await openAlexCount(doi);
-    const fetched = openAlex && openAlex > 0 ? openAlex : ((await crossrefCount(doi)) ?? openAlex);
+    const [openAlex, crossref] = await Promise.all([openAlexCount(doi), crossrefCount(doi)]);
+    const fetched =
+      openAlex == null && crossref == null ? null : Math.max(openAlex ?? 0, crossref ?? 0);
     const next = fetched == null ? current : Math.max(fetched, 0);
     totalCitations += next;
     if (fetched != null && next !== current) {

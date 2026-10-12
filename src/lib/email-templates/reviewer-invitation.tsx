@@ -13,6 +13,7 @@ import type { TemplateEntry } from "./registry";
 
 export interface ReviewerInvitationProps {
   reviewerName?: string;
+  assignmentId?: string;
   title?: string;
   researchDomain?: string;
   keywords?: string;
@@ -100,7 +101,8 @@ export function ReviewerInvitationEmail({
 
 export const template = {
   component: ReviewerInvitationEmail,
-  subject: "Invitation to review a manuscript — National Youth Research Journal",
+  subject: (data) =>
+    `Invitation to review a manuscript${data.assignmentId ? ` [NYRJ Review ${data.assignmentId}]` : ""} — National Youth Research Journal`,
   displayName: "Peer reviewer invitation",
   previewData: {
     reviewerName: "Dr. Rao",

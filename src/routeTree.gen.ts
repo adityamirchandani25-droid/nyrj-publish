@@ -41,8 +41,10 @@ import { Route as ChaptersSlugRouteImport } from './routes/chapters.$slug'
 import { Route as SubmitIndexRouteImport } from './routes/submit.index'
 import { Route as SubmitApplyRouteImport } from './routes/submit.apply'
 import { Route as ApiPublicAssignInitialReviewersRouteImport } from './routes/api/public/assign-initial-reviewers'
+import { Route as ApiPublicEditorialFollowupsRouteImport } from './routes/api/public/editorial-followups'
 import { Route as ApiPublicRefreshCitationsRouteImport } from './routes/api/public/refresh-citations'
 import { Route as ApiPublicReviewRemindersRouteImport } from './routes/api/public/review-reminders'
+import { Route as ApiPublicSyncReviewEmailsRouteImport } from './routes/api/public/sync-review-emails'
 import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
 import { Route as ApiPublicArticleSlugPdfRouteImport } from './routes/api/public/article.$slug.pdf'
 
@@ -207,6 +209,12 @@ const ApiPublicAssignInitialReviewersRoute =
     path: '/api/public/assign-initial-reviewers',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicEditorialFollowupsRoute =
+  ApiPublicEditorialFollowupsRouteImport.update({
+    id: '/api/public/editorial-followups',
+    path: '/api/public/editorial-followups',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicRefreshCitationsRoute =
   ApiPublicRefreshCitationsRouteImport.update({
     id: '/api/public/refresh-citations',
@@ -217,6 +225,12 @@ const ApiPublicReviewRemindersRoute =
   ApiPublicReviewRemindersRouteImport.update({
     id: '/api/public/review-reminders',
     path: '/api/public/review-reminders',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicSyncReviewEmailsRoute =
+  ApiPublicSyncReviewEmailsRouteImport.update({
+    id: '/api/public/sync-review-emails',
+    path: '/api/public/sync-review-emails',
     getParentRoute: () => rootRouteImport,
   } as any)
 const LovableEmailTransactionalPreviewRoute =
@@ -264,8 +278,10 @@ export interface FileRoutesByFullPath {
   '/submit/apply': typeof SubmitApplyRoute
   '/submit/': typeof SubmitIndexRoute
   '/api/public/assign-initial-reviewers': typeof ApiPublicAssignInitialReviewersRoute
+  '/api/public/editorial-followups': typeof ApiPublicEditorialFollowupsRoute
   '/api/public/refresh-citations': typeof ApiPublicRefreshCitationsRoute
   '/api/public/review-reminders': typeof ApiPublicReviewRemindersRoute
+  '/api/public/sync-review-emails': typeof ApiPublicSyncReviewEmailsRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
   '/api/public/article/$slug/pdf': typeof ApiPublicArticleSlugPdfRoute
 }
@@ -302,8 +318,10 @@ export interface FileRoutesByTo {
   '/submit/apply': typeof SubmitApplyRoute
   '/submit': typeof SubmitIndexRoute
   '/api/public/assign-initial-reviewers': typeof ApiPublicAssignInitialReviewersRoute
+  '/api/public/editorial-followups': typeof ApiPublicEditorialFollowupsRoute
   '/api/public/refresh-citations': typeof ApiPublicRefreshCitationsRoute
   '/api/public/review-reminders': typeof ApiPublicReviewRemindersRoute
+  '/api/public/sync-review-emails': typeof ApiPublicSyncReviewEmailsRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
   '/api/public/article/$slug/pdf': typeof ApiPublicArticleSlugPdfRoute
 }
@@ -341,8 +359,10 @@ export interface FileRoutesById {
   '/submit/apply': typeof SubmitApplyRoute
   '/submit/': typeof SubmitIndexRoute
   '/api/public/assign-initial-reviewers': typeof ApiPublicAssignInitialReviewersRoute
+  '/api/public/editorial-followups': typeof ApiPublicEditorialFollowupsRoute
   '/api/public/refresh-citations': typeof ApiPublicRefreshCitationsRoute
   '/api/public/review-reminders': typeof ApiPublicReviewRemindersRoute
+  '/api/public/sync-review-emails': typeof ApiPublicSyncReviewEmailsRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
   '/api/public/article/$slug/pdf': typeof ApiPublicArticleSlugPdfRoute
 }
@@ -381,8 +401,10 @@ export interface FileRouteTypes {
     | '/submit/apply'
     | '/submit/'
     | '/api/public/assign-initial-reviewers'
+    | '/api/public/editorial-followups'
     | '/api/public/refresh-citations'
     | '/api/public/review-reminders'
+    | '/api/public/sync-review-emails'
     | '/lovable/email/transactional/preview'
     | '/api/public/article/$slug/pdf'
   fileRoutesByTo: FileRoutesByTo
@@ -419,8 +441,10 @@ export interface FileRouteTypes {
     | '/submit/apply'
     | '/submit'
     | '/api/public/assign-initial-reviewers'
+    | '/api/public/editorial-followups'
     | '/api/public/refresh-citations'
     | '/api/public/review-reminders'
+    | '/api/public/sync-review-emails'
     | '/lovable/email/transactional/preview'
     | '/api/public/article/$slug/pdf'
   id:
@@ -457,8 +481,10 @@ export interface FileRouteTypes {
     | '/submit/apply'
     | '/submit/'
     | '/api/public/assign-initial-reviewers'
+    | '/api/public/editorial-followups'
     | '/api/public/refresh-citations'
     | '/api/public/review-reminders'
+    | '/api/public/sync-review-emails'
     | '/lovable/email/transactional/preview'
     | '/api/public/article/$slug/pdf'
   fileRoutesById: FileRoutesById
@@ -495,8 +521,10 @@ export interface RootRouteChildren {
   SubmitApplyRoute: typeof SubmitApplyRoute
   SubmitIndexRoute: typeof SubmitIndexRoute
   ApiPublicAssignInitialReviewersRoute: typeof ApiPublicAssignInitialReviewersRoute
+  ApiPublicEditorialFollowupsRoute: typeof ApiPublicEditorialFollowupsRoute
   ApiPublicRefreshCitationsRoute: typeof ApiPublicRefreshCitationsRoute
   ApiPublicReviewRemindersRoute: typeof ApiPublicReviewRemindersRoute
+  ApiPublicSyncReviewEmailsRoute: typeof ApiPublicSyncReviewEmailsRoute
   LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
   ApiPublicArticleSlugPdfRoute: typeof ApiPublicArticleSlugPdfRoute
 }
@@ -727,6 +755,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicAssignInitialReviewersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/editorial-followups': {
+      id: '/api/public/editorial-followups'
+      path: '/api/public/editorial-followups'
+      fullPath: '/api/public/editorial-followups'
+      preLoaderRoute: typeof ApiPublicEditorialFollowupsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/refresh-citations': {
       id: '/api/public/refresh-citations'
       path: '/api/public/refresh-citations'
@@ -739,6 +774,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/review-reminders'
       fullPath: '/api/public/review-reminders'
       preLoaderRoute: typeof ApiPublicReviewRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/sync-review-emails': {
+      id: '/api/public/sync-review-emails'
+      path: '/api/public/sync-review-emails'
+      fullPath: '/api/public/sync-review-emails'
+      preLoaderRoute: typeof ApiPublicSyncReviewEmailsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/lovable/email/transactional/preview': {
@@ -802,8 +844,10 @@ const rootRouteChildren: RootRouteChildren = {
   SubmitApplyRoute: SubmitApplyRoute,
   SubmitIndexRoute: SubmitIndexRoute,
   ApiPublicAssignInitialReviewersRoute: ApiPublicAssignInitialReviewersRoute,
+  ApiPublicEditorialFollowupsRoute: ApiPublicEditorialFollowupsRoute,
   ApiPublicRefreshCitationsRoute: ApiPublicRefreshCitationsRoute,
   ApiPublicReviewRemindersRoute: ApiPublicReviewRemindersRoute,
+  ApiPublicSyncReviewEmailsRoute: ApiPublicSyncReviewEmailsRoute,
   LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,
   ApiPublicArticleSlugPdfRoute: ApiPublicArticleSlugPdfRoute,
 }

@@ -48,7 +48,10 @@ export function ReviewReceivedEmail({
             </Text>
           )}
           <Text style={{ fontSize: "13px", color: "#666", marginTop: "24px" }}>
-            Review it in the staff dashboard before forwarding edits to the author.
+            <a href={`https://nyrj.org/admin/submissions?review=${submissionId}`}>
+              Open this paper in the peer review panel
+            </a>{" "}
+            before forwarding edits to the author.
           </Text>
         </Container>
       </Body>

@@ -41,6 +41,16 @@ export type AuditRow = {
   created_at: string;
 };
 
+export type ReviewEmailReply = {
+  id: string;
+  assignment_id: string;
+  from_email: string;
+  subject: string;
+  body_text: string;
+  received_at: string;
+  attachments: Array<{ name: string; path: string }>;
+};
+
 export type ReviewerRow = {
   id: string;
   name: string;
@@ -133,8 +143,10 @@ export const assignReviewer = createServerFn({ method: "POST" })
     }
 
     const token = newToken();
+    const assignmentId = crypto.randomUUID();
     const dueAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString();
     const { error } = await supabaseAdmin.from("review_assignments").insert({
+      id: assignmentId,
       submission_id: data.submissionId,
       reviewer_email: reviewerEmail,
       reviewer_name: data.reviewerName,
@@ -154,6 +166,7 @@ export const assignReviewer = createServerFn({ method: "POST" })
         replyTo: "NYRJINFO@gmail.com",
         templateData: {
           reviewerName: data.reviewerName || "Reviewer",
+          assignmentId,
           title: s.title,
           researchDomain: s.research_domain,
           keywords: s.keywords,
@@ -213,6 +226,7 @@ export const resendReviewerInvitation = createServerFn({ method: "POST" })
       replyTo: "NYRJINFO@gmail.com",
       templateData: {
         reviewerName: r.reviewer_name || "Reviewer",
+        assignmentId: data.assignmentId,
         title: s.title ?? "",
         researchDomain: s.research_domain ?? "",
         keywords: s.keywords ?? "",
@@ -261,6 +275,152 @@ export const listAuditLog = createServerFn({ method: "POST" })
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
     return (rows ?? []) as AuditRow[];
+  });
+
+export const listReviewEmailReplies = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => StaffSchema.extend({ submissionId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }): Promise<ReviewEmailReply[]> => {
+    const { verifyStaffToken } = await import("./staff-auth.server");
+    verifyStaffToken(data.staffToken);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: assignments, error: assignmentError } = await supabaseAdmin
+      .from("review_assignments")
+      .select("id")
+      .eq("submission_id", data.submissionId);
+    if (assignmentError) throw new Error(assignmentError.message);
+    const ids = (assignments ?? []).map((row) => row.id);
+    if (!ids.length) return [];
+    const { data: rows, error } = await supabaseAdmin
+      .from("peer_review_email_replies")
+      .select("id, assignment_id, from_email, subject, body_text, received_at, attachments")
+      .in("assignment_id", ids)
+      .order("received_at", { ascending: false })
+      .limit(300);
+    if (error) throw new Error(error.message);
+    return (rows ?? []).map((row) => ({
+      ...row,
+      attachments: Array.isArray(row.attachments)
+        ? (row.attachments as ReviewEmailReply["attachments"])
+        : [],
+    }));
+  });
+
+export const openReviewEmailAttachment = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) =>
+    StaffSchema.extend({ replyId: z.string().uuid(), path: z.string().min(1).max(500) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { verifyStaffToken } = await import("./staff-auth.server");
+    verifyStaffToken(data.staffToken);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: reply } = await supabaseAdmin
+      .from("peer_review_email_replies")
+      .select("attachments")
+      .eq("id", data.replyId)
+      .maybeSingle();
+    const attachment = Array.isArray(reply?.attachments)
+      ? (reply.attachments as ReviewEmailReply["attachments"]).find(
+          (file) => file.path === data.path,
+        )
+      : null;
+    if (!attachment) throw new Error("This attachment is not part of that email reply.");
+    const { data: signed, error } = await supabaseAdmin.storage
+      .from("submissions")
+      .createSignedUrl(attachment.path, 60 * 10, { download: attachment.name });
+    if (error || !signed) throw new Error("Could not open the email attachment.");
+    return { url: signed.signedUrl };
+  });
+
+export const markEmailReplyAsReview = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) =>
+    StaffSchema.extend({
+      replyId: z.string().uuid(),
+      attachmentPath: z.string().max(500).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { verifyStaffToken } = await import("./staff-auth.server");
+    verifyStaffToken(data.staffToken);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { audit } = await import("./peer-review.server");
+    const { data: reply, error: replyError } = await supabaseAdmin
+      .from("peer_review_email_replies")
+      .select("assignment_id, body_text, received_at, attachments")
+      .eq("id", data.replyId)
+      .maybeSingle();
+    if (replyError || !reply) throw new Error("Email reply not found.");
+    const attachments = Array.isArray(reply.attachments)
+      ? (reply.attachments as ReviewEmailReply["attachments"])
+      : [];
+    const selected = data.attachmentPath
+      ? attachments.find((attachment) => attachment.path === data.attachmentPath)
+      : undefined;
+    if (data.attachmentPath && !selected)
+      throw new Error("That attachment is not part of this reply.");
+    if (!reply.body_text.trim() && !selected)
+      throw new Error("Select an attached review or use an email with feedback text.");
+    const { data: assignment } = await supabaseAdmin
+      .from("review_assignments")
+      .select("submission_id")
+      .eq("id", reply.assignment_id)
+      .maybeSingle();
+    if (!assignment) throw new Error("The reviewer assignment no longer exists.");
+    const { data: updated, error } = await supabaseAdmin
+      .from("review_assignments")
+      .update({
+        status: "review_received",
+        review_comments: reply.body_text.trim() || "Reviewer feedback attached by email.",
+        review_submitted_at: reply.received_at,
+        ...(selected ? { review_file_path: selected.path, review_file_name: selected.name } : {}),
+      } as never)
+      .eq("id", reply.assignment_id)
+      .in("status", ["invited", "accepted", "no_response", "review_received"])
+      .select("id")
+      .maybeSingle();
+    if (error || !updated)
+      throw new Error("This assignment can no longer receive reviewer feedback.");
+    await audit(
+      assignment.submission_id,
+      "staff",
+      "Email reply marked as reviewer feedback",
+      data.replyId,
+    );
+    return { ok: true };
+  });
+
+export const recordReviewerEmailDecision = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) =>
+    StaffSchema.extend({
+      replyId: z.string().uuid(),
+      decision: z.enum(["accepted", "declined"]),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { verifyStaffToken } = await import("./staff-auth.server");
+    verifyStaffToken(data.staffToken);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { audit } = await import("./peer-review.server");
+    const { data: reply } = await supabaseAdmin
+      .from("peer_review_email_replies")
+      .select("assignment_id, from_email, received_at")
+      .eq("id", data.replyId)
+      .maybeSingle();
+    if (!reply) throw new Error("Email reply not found.");
+    const { data: updated, error } = await supabaseAdmin
+      .from("review_assignments")
+      .update({ status: data.decision, responded_at: reply.received_at } as never)
+      .eq("id", reply.assignment_id)
+      .eq("status", "invited")
+      .select("submission_id")
+      .maybeSingle();
+    if (error || !updated) throw new Error("This invitation is no longer awaiting a response.");
+    await audit(
+      updated.submission_id,
+      "staff",
+      `Reviewer ${data.decision} by email`,
+      reply.from_email,
+    );
+    return { ok: true };
   });
 
 export const openReviewFileForStaff = createServerFn({ method: "POST" })
@@ -375,6 +535,16 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
         hasReviewFile: data.includeFile,
       },
     });
+    const { error: followupError } = await supabaseAdmin
+      .from("manuscript_submissions")
+      .update({
+        revision_requested_at: new Date().toISOString(),
+        revision_reminder_sent_at: null,
+        revision_staff_alert_sent_at: null,
+      } as never)
+      .eq("id", submissionId)
+      .eq("status", "waiting for edits");
+    if (followupError) console.error("[server] revision follow-up state failed:", followupError);
 
     try {
       const { updateSubmissionRow } = await import("./excel-sync.server");

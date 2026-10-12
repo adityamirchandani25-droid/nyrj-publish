@@ -1,14 +1,20 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { getSession, staffToken } from "@/lib/auth";
+import { VersionHistory } from "@/components/VersionHistory";
 import {
   assignReviewer,
   listAssignments,
   listAuditLog,
+  listReviewEmailReplies,
+  openReviewEmailAttachment,
   openReviewFileForStaff,
+  recordReviewerEmailDecision,
   resendReviewerInvitation,
   sendEditsToAuthor,
+  markEmailReplyAsReview,
   type AssignmentRow,
   type AuditRow,
+  type ReviewEmailReply,
 } from "@/lib/peer-review.functions";
 
 const heading = "text-[10px] uppercase tracking-[0.18em] text-accent";
@@ -40,6 +46,7 @@ function statusLabel(s: string) {
 export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
   const [rows, setRows] = useState<AssignmentRow[] | null>(null);
   const [audit, setAudit] = useState<AuditRow[]>([]);
+  const [emailReplies, setEmailReplies] = useState<ReviewEmailReply[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -48,8 +55,10 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
   const [draft, setDraft] = useState("");
   const [includeFile, setIncludeFile] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [versionsRefreshKey, setVersionsRefreshKey] = useState(0);
 
   async function load() {
+    setError(null);
     try {
       const [all, log] = await Promise.all([
         listAssignments({ data: { staffToken: staffToken() } }),
@@ -57,6 +66,18 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
       ]);
       setRows(all.filter((a) => a.submission_id === submissionId));
       setAudit(log);
+      try {
+        const replies = await listReviewEmailReplies({
+          data: { staffToken: staffToken(), submissionId },
+        });
+        setEmailReplies(replies);
+      } catch (replyError) {
+        setError(
+          replyError instanceof Error
+            ? replyError.message
+            : "Could not load reviewer email replies.",
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load review data.");
     }
@@ -127,6 +148,16 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
 
   return (
     <div className="px-4 pb-4 pt-3 border-t border-border space-y-6">
+      <button
+        type="button"
+        className={btnGhost}
+        onClick={() => {
+          void load();
+          setVersionsRefreshKey((key) => key + 1);
+        }}
+      >
+        Refresh peer review and revisions
+      </button>
       <form onSubmit={invite} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
         <div>
           <p className={heading}>Reviewer email</p>
@@ -285,6 +316,159 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
             </div>
           ))}
         </div>
+      </div>
+
+      <div>
+        <p className={heading}>Reviewer email replies</p>
+        {emailReplies.length === 0 ? (
+          <p className="mt-2 text-xs text-muted-foreground italic">
+            No matched mailbox replies yet.
+          </p>
+        ) : (
+          <div className="mt-2 space-y-3">
+            {emailReplies.map((reply) => (
+              <div key={reply.id} className="border border-border p-3">
+                <p className="text-sm text-primary">{reply.subject || "(No subject)"}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {reply.from_email} · {new Date(reply.received_at).toLocaleString()}
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
+                  {reply.body_text}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {reply.attachments.map((attachment) => (
+                    <button
+                      key={attachment.path}
+                      type="button"
+                      className={btnGhost}
+                      onClick={async () => {
+                        try {
+                          const { url } = await openReviewEmailAttachment({
+                            data: {
+                              staffToken: staffToken(),
+                              replyId: reply.id,
+                              path: attachment.path,
+                            },
+                          });
+                          window.open(url, "_blank", "noopener,noreferrer");
+                        } catch (err) {
+                          setError(
+                            err instanceof Error ? err.message : "Could not open the attachment.",
+                          );
+                        }
+                      }}
+                    >
+                      Open {attachment.name}
+                    </button>
+                  ))}
+                </div>
+                {rows?.find((assignment) => assignment.id === reply.assignment_id)?.status ===
+                  "invited" && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {(["accepted", "declined"] as const).map((decision) => (
+                      <button
+                        key={decision}
+                        type="button"
+                        className={btnGhost}
+                        disabled={busy}
+                        onClick={async () => {
+                          setBusy(true);
+                          try {
+                            await recordReviewerEmailDecision({
+                              data: { staffToken: staffToken(), replyId: reply.id, decision },
+                            });
+                            setNote(`Reviewer marked ${decision} from their email reply.`);
+                            await load();
+                          } catch (err) {
+                            setError(
+                              err instanceof Error ? err.message : "Could not record the reply.",
+                            );
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
+                      >
+                        Mark {decision}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {(reply.body_text.trim() || reply.attachments.length > 0) && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {reply.body_text.trim() && (
+                      <button
+                        type="button"
+                        className={btn}
+                        disabled={busy}
+                        onClick={async () => {
+                          setBusy(true);
+                          try {
+                            await markEmailReplyAsReview({
+                              data: { staffToken: staffToken(), replyId: reply.id },
+                            });
+                            setNote(
+                              "Email text saved as reviewer feedback. Check it before sending edits to the author.",
+                            );
+                            await load();
+                          } catch (err) {
+                            setError(
+                              err instanceof Error
+                                ? err.message
+                                : "Could not save reviewer feedback.",
+                            );
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
+                      >
+                        Use email text as reviewer feedback
+                      </button>
+                    )}
+                    {reply.attachments.map((attachment) => (
+                      <button
+                        key={attachment.path}
+                        type="button"
+                        className={btnGhost}
+                        disabled={busy}
+                        onClick={async () => {
+                          setBusy(true);
+                          try {
+                            await markEmailReplyAsReview({
+                              data: {
+                                staffToken: staffToken(),
+                                replyId: reply.id,
+                                attachmentPath: attachment.path,
+                              },
+                            });
+                            setNote(
+                              "Selected email file saved as reviewer feedback. Check it before sending edits to the author.",
+                            );
+                            await load();
+                          } catch (err) {
+                            setError(
+                              err instanceof Error
+                                ? err.message
+                                : "Could not save reviewer feedback.",
+                            );
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
+                      >
+                        Use with {attachment.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <p className={heading}>Author revisions</p>
+        <VersionHistory key={versionsRefreshKey} submissionId={submissionId} />
       </div>
 
       <div>

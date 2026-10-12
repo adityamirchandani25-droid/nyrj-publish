@@ -8,6 +8,7 @@ export interface RevisionReceivedProps {
   submitterEmail?: string;
   toAuthor?: boolean;
   note?: string;
+  submissionId?: string;
 }
 
 export function RevisionReceivedEmail({
@@ -16,6 +17,7 @@ export function RevisionReceivedEmail({
   submitterEmail = "",
   toAuthor = false,
   note = "",
+  submissionId = "",
 }: RevisionReceivedProps) {
   return (
     <Html>
@@ -41,6 +43,13 @@ export function RevisionReceivedEmail({
           {note ? (
             <Text style={{ fontSize: "15px", whiteSpace: "pre-wrap", margin: "16px 0" }}>
               Author note: {note}
+            </Text>
+          ) : null}
+          {!toAuthor && submissionId ? (
+            <Text style={{ fontSize: "15px" }}>
+              <a href={`https://nyrj.org/admin/submissions?review=${submissionId}`}>
+                Open this paper in the peer review panel
+              </a>
             </Text>
           ) : null}
           <Text style={{ fontSize: "13px", color: "#666", marginTop: "24px" }}>

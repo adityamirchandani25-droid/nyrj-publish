@@ -94,7 +94,8 @@ export function ReviewerReminderEmail({
 
 export const template = {
   component: ReviewerReminderEmail,
-  subject: "A gentle reminder — National Youth Research Journal",
+  subject: (data) =>
+    `A gentle reminder${data.assignmentId ? ` [NYRJ Review ${data.assignmentId}]` : ""} — National Youth Research Journal`,
   displayName: "Reviewer reminder (gentle follow-up)",
   previewData: {
     reviewerName: "Dr. Rao",

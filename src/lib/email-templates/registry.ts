@@ -11,6 +11,7 @@ import { template as reviewerAccountApprovedTemplate } from "./reviewer-account-
 import { template as reviewerResponseTemplate } from "./reviewer-response";
 import { template as reviewerReminderTemplate } from "./reviewer-reminder";
 import { template as reviewerNoResponseTemplate } from "./reviewer-no-response";
+import { template as reviewerFollowupStaffTemplate } from "./reviewer-followup-staff";
 import { template as reviewThankYouTemplate } from "./review-thank-you";
 import { template as initialReviewAssignmentTemplate } from "./initial-review-assignment";
 import { template as initialReviewerAccountTemplate } from "./initial-reviewer-account";
@@ -20,6 +21,9 @@ import { template as editorAccountApprovedTemplate } from "./editor-account-appr
 import { template as editorRecommendationTemplate } from "./editor-recommendation";
 import { template as authorRevisionRequestTemplate } from "./author-revision-request";
 import { template as revisionReceivedTemplate } from "./revision-received";
+import { template as authorRevisionReminderTemplate } from "./author-revision-reminder";
+import { template as authorRevisionOverdueTemplate } from "./author-revision-overdue";
+import { template as initialReviewWorkloadTemplate } from "./initial-review-workload";
 
 export interface TemplateEntry {
   // Templates accept different prop shapes; the registry erases them and each
@@ -49,6 +53,7 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   "reviewer-response": reviewerResponseTemplate,
   "reviewer-reminder": reviewerReminderTemplate,
   "reviewer-no-response": reviewerNoResponseTemplate,
+  "reviewer-followup-staff": reviewerFollowupStaffTemplate,
   "review-thank-you": reviewThankYouTemplate,
   "initial-review-assignment": initialReviewAssignmentTemplate,
   "initial-reviewer-account": initialReviewerAccountTemplate,
@@ -58,4 +63,7 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   "editor-recommendation": editorRecommendationTemplate,
   "author-revision-request": authorRevisionRequestTemplate,
   "revision-received": revisionReceivedTemplate,
+  "author-revision-reminder": authorRevisionReminderTemplate,
+  "author-revision-overdue": authorRevisionOverdueTemplate,
+  "initial-review-workload": initialReviewWorkloadTemplate,
 };

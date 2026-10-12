@@ -12,11 +12,12 @@ import { loadEnv } from "vite";
 // server-side code only. These are NOT injected into the client bundle.
 const serverEnv = loadEnv(process.env["NODE_ENV"] ?? "development", process.cwd(), "");
 Object.assign(process.env, serverEnv);
+const nitroOptions = { preset: "vercel", vercel: { functions: { maxDuration: 60 } } };
 
 export default defineConfig({
   // This repository deploys to Vercel. Pinning the Nitro target prevents local
   // and CI production builds from falling back to Lovable's Cloudflare preset.
-  nitro: { preset: "vercel" },
+  nitro: nitroOptions,
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this

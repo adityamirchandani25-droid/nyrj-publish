@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 /**
  * Refreshes citation counts for every published article from the open
- * scholarly record (OpenAlex, falling back to Crossref).
+ * scholarly record (the larger indexed count from OpenAlex and Crossref).
  * Protected with the Vercel cron secret; safe to call daily.
  */
 async function run(request: Request) {

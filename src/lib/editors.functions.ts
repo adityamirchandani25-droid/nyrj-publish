@@ -453,6 +453,17 @@ export const resolveRecommendation = createServerFn({ method: "POST" })
           templateData: { authorName, title: sub.title, body, resubmitUrl },
         });
         emailed = true;
+        const { error: followupError } = await supabaseAdmin
+          .from("manuscript_submissions")
+          .update({
+            revision_requested_at: new Date().toISOString(),
+            revision_reminder_sent_at: null,
+            revision_staff_alert_sent_at: null,
+          } as never)
+          .eq("id", rec.submission_id)
+          .eq("status", "waiting for edits");
+        if (followupError)
+          console.error("[server] revision follow-up state failed:", followupError);
       } catch (err) {
         console.error("[server] author revision email failed:", err);
       }
@@ -744,6 +755,7 @@ export const finalizeRevision = createServerFn({ method: "POST" })
           templateData: {
             title: row.title,
             version: nextVersion,
+            submissionId: row.id,
             submitterEmail: row.submitter_email,
             toAuthor: false,
             note: data.note,

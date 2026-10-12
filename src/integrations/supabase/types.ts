@@ -338,6 +338,7 @@ export type Database = {
         Row: {
           active: boolean;
           assigned_count: number;
+          workload_reminder_sent_on: string | null;
           auth_user_id: string | null;
           created_at: string;
           email: string;
@@ -348,6 +349,7 @@ export type Database = {
         Insert: {
           active?: boolean;
           assigned_count?: number;
+          workload_reminder_sent_on?: string | null;
           auth_user_id?: string | null;
           created_at?: string;
           email: string;
@@ -358,6 +360,7 @@ export type Database = {
         Update: {
           active?: boolean;
           assigned_count?: number;
+          workload_reminder_sent_on?: string | null;
           auth_user_id?: string | null;
           created_at?: string;
           email?: string;
@@ -485,6 +488,9 @@ export type Database = {
           research_domain: string;
           research_type: string | null;
           research_type_other: string | null;
+          revision_requested_at: string | null;
+          revision_reminder_sent_at: string | null;
+          revision_staff_alert_sent_at: string | null;
           resubmit_token: string | null;
           status: string;
           submitter_email: string;
@@ -523,6 +529,9 @@ export type Database = {
           research_domain?: string;
           research_type?: string | null;
           research_type_other?: string | null;
+          revision_requested_at?: string | null;
+          revision_reminder_sent_at?: string | null;
+          revision_staff_alert_sent_at?: string | null;
           resubmit_token?: string | null;
           status?: string;
           submitter_email: string;
@@ -561,6 +570,9 @@ export type Database = {
           research_domain?: string;
           research_type?: string | null;
           research_type_other?: string | null;
+          revision_requested_at?: string | null;
+          revision_reminder_sent_at?: string | null;
+          revision_staff_alert_sent_at?: string | null;
           resubmit_token?: string | null;
           status?: string;
           submitter_email?: string;
@@ -608,6 +620,50 @@ export type Database = {
             columns: ["submission_id"];
             isOneToOne: false;
             referencedRelation: "manuscript_submissions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      peer_review_email_replies: {
+        Row: {
+          id: string;
+          gmail_message_id: string;
+          assignment_id: string;
+          from_email: string;
+          subject: string;
+          body_text: string;
+          received_at: string;
+          attachments: Json;
+          imported_at: string;
+        };
+        Insert: {
+          id?: string;
+          gmail_message_id: string;
+          assignment_id: string;
+          from_email: string;
+          subject?: string;
+          body_text?: string;
+          received_at: string;
+          attachments?: Json;
+          imported_at?: string;
+        };
+        Update: {
+          id?: string;
+          gmail_message_id?: string;
+          assignment_id?: string;
+          from_email?: string;
+          subject?: string;
+          body_text?: string;
+          received_at?: string;
+          attachments?: Json;
+          imported_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "peer_review_email_replies_assignment_id_fkey";
+            columns: ["assignment_id"];
+            isOneToOne: false;
+            referencedRelation: "review_assignments";
             referencedColumns: ["id"];
           },
         ];
@@ -698,8 +754,10 @@ export type Database = {
           edits_sent_file_path: string | null;
           id: string;
           invite_reminder_sent_at: string | null;
+          followup_staff_notified_at: string | null;
           invite_token: string;
           no_response_notified_at: string | null;
+          no_response_followup_sent_at: string | null;
           responded_at: string | null;
           review_comments: string;
           review_file_name: string | null;
@@ -721,8 +779,10 @@ export type Database = {
           edits_sent_file_path?: string | null;
           id?: string;
           invite_reminder_sent_at?: string | null;
+          followup_staff_notified_at?: string | null;
           invite_token: string;
           no_response_notified_at?: string | null;
+          no_response_followup_sent_at?: string | null;
           responded_at?: string | null;
           review_comments?: string;
           review_file_name?: string | null;
@@ -744,8 +804,10 @@ export type Database = {
           edits_sent_file_path?: string | null;
           id?: string;
           invite_reminder_sent_at?: string | null;
+          followup_staff_notified_at?: string | null;
           invite_token?: string;
           no_response_notified_at?: string | null;
+          no_response_followup_sent_at?: string | null;
           responded_at?: string | null;
           review_comments?: string;
           review_file_name?: string | null;
