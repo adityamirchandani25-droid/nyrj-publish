@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS public.peer_review_email_replies (
 CREATE INDEX IF NOT EXISTS peer_review_email_replies_assignment_idx
   ON public.peer_review_email_replies (assignment_id, received_at DESC);
 
-GRANT ALL ON public.peer_review_email_replies TO service_role;
+GRANT SELECT, INSERT ON public.peer_review_email_replies TO service_role;
 ALTER TABLE public.peer_review_email_replies ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Deny client access to peer review email replies"

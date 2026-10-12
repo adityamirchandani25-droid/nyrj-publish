@@ -4,10 +4,12 @@ The site can import replies sent to `NYRJINFO@gmail.com` into the matching manus
 
 ## Activate
 
-1. Apply `drizzle/migrations/0010_editorial_followups.sql` and `drizzle/migrations/0011_peer_review_email_replies.sql` to the production Supabase database before deploying the matching code.
+1. Apply `drizzle/migrations/0010_editorial_followups.sql`, `drizzle/migrations/0011_peer_review_email_replies.sql`, and `drizzle/migrations/0012_reviewer_followup_staff_notice.sql` to the production Supabase database before deploying the matching code.
 2. In a Google Cloud project, enable the Gmail API and create a web OAuth client. Authorize **NYRJINFO@gmail.com** with offline access and the `https://www.googleapis.com/auth/gmail.readonly` scope. Obtain that account's refresh token.
 3. Set `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, and `GMAIL_REFRESH_TOKEN` as server-only deployment environment variables. The daily route still uses the existing `CRON_SECRET`.
 4. Deploy, then call `GET /api/public/sync-review-emails` with `Authorization: Bearer <CRON_SECRET>`. A healthy configured response has `"configured":true`; check `imported` and `unmatched` before relying on the scheduled run.
+
+The OAuth app's public privacy policy must describe the Gmail data the site reads and stores. Keep the published `/privacy` page current before requesting Google's production verification. An external OAuth app in Testing gives short-lived refresh tokens; production use requires moving beyond Testing and satisfying Google's applicable verification requirements.
 
 Google documents the [Gmail message list/get API](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages/list) and [server-side OAuth refresh tokens](https://developers.google.com/identity/protocols/oauth2/web-server).
 

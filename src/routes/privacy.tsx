@@ -13,8 +13,7 @@ export const Route = createFileRoute("/privacy")({
       { property: "og:title", content: "Privacy Policy — NYRJ" },
       {
         property: "og:description",
-        content:
-          "NYRJ does not sell or share your personal information. Read our full privacy policy.",
+        content: "How NYRJ uses personal information for publishing and peer review.",
       },
     ],
   }),
@@ -30,7 +29,7 @@ function Privacy() {
           Privacy Policy
         </h1>
         <p className="mt-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          Last Updated: July 5, 2026
+          Last Updated: October 12, 2026
         </p>
 
         <section className="mt-10 space-y-5 text-sm sm:text-base text-foreground/90 leading-relaxed">
@@ -85,6 +84,29 @@ function Privacy() {
             property.
           </p>
 
+          <h2 className="font-serif text-2xl text-primary mt-8">
+            Journal Mailbox and Reviewer Replies
+          </h2>
+
+          <p>
+            With permission from the NYRJ journal account, our editorial system uses read-only
+            Google Gmail access to check messages sent to NYRJINFO@gmail.com. It looks for replies
+            from assigned peer reviewers and matches them to manuscripts. When a reply matches, we
+            copy the reviewer&apos;s email address, subject, message text, received date, and
+            supported attachments into our private editorial records. Authorized editorial staff can
+            view these replies in the Peer Review panel and decide how to process them.
+          </p>
+
+          <p>
+            We use this Gmail data only to manage peer review. The system does not send, delete,
+            archive, or change messages in the Google mailbox, and it does not copy messages that
+            cannot be matched to a reviewer assignment into the Peer Review panel. We do not sell
+            Gmail data or use it for advertising. The copied replies are kept with the
+            journal&apos;s editorial records and are available only to authorized staff and the
+            service providers that host those records for us. Questions about access to or removal
+            of a copied reply can be sent to NYRJINFO@gmail.com.
+          </p>
+
           <p>
             Our commitment is simple: your information is used only to support the publication of
             your research and the operation of the National Youth Research Journal.
@@ -118,7 +140,7 @@ function Privacy() {
           </p>
 
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground pt-6 border-t border-border">
-            Last Updated: July 5, 2026
+            Last Updated: October 12, 2026
           </p>
         </section>
       </article>
