@@ -489,7 +489,7 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
       deleted_at?: string | null;
     };
     if (!s.submitter_email) throw new Error("No author email on this submission.");
-    if (s.deleted_at || s.decision !== "pending") {
+    if (s.deleted_at || s.decision === "declined") {
       throw new Error("This submission already has a final decision and cannot request edits.");
     }
 
@@ -500,7 +500,7 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
       .from("manuscript_submissions")
       .update({ resubmit_token: resubmitToken, status: "waiting for edits" } as never)
       .eq("id", submissionId)
-      .eq("decision", "pending")
+      .neq("decision", "declined")
       .is("deleted_at", null)
       .select("id")
       .maybeSingle();

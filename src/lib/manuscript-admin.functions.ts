@@ -74,7 +74,14 @@ export type AdminManuscriptRow = {
   initial_reviewer_assigned_at: string | null;
 };
 
-type UpdatePatch = { status?: string; decision?: string };
+type UpdatePatch = {
+  status?: string;
+  decision?: string;
+  resubmit_token?: string | null;
+  revision_requested_at?: string;
+  revision_reminder_sent_at?: null;
+  revision_staff_alert_sent_at?: null;
+};
 
 type Json = string | number | boolean | null | { [k: string]: Json } | Json[];
 
@@ -168,11 +175,35 @@ export const updateManuscriptSubmission = createServerFn({ method: "POST" })
     if (data.decision) patch.decision = data.decision;
     if (Object.keys(patch).length === 0) return { ok: true };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: current, error: currentError } = await supabaseAdmin
+      .from("manuscript_submissions")
+      .select("status, decision, resubmit_token")
+      .eq("id", data.id)
+      .is("deleted_at", null)
+      .single();
+    if (currentError || !current) throw new Error("Submission not found.");
+    const nextStatus = patch.status ?? current.status;
+    const nextDecision = patch.decision ?? current.decision;
+    if (nextStatus === "waiting for edits" && nextDecision === "declined") {
+      throw new Error("A declined paper cannot be opened for revisions.");
+    }
+    if (nextStatus === "waiting for edits") {
+      const { newResubmitToken } = await import("./editor-auth.server");
+      patch.resubmit_token = current.resubmit_token ?? newResubmitToken();
+      if (current.status !== "waiting for edits") {
+        patch.revision_requested_at = new Date().toISOString();
+        patch.revision_reminder_sent_at = null;
+        patch.revision_staff_alert_sent_at = null;
+      }
+    } else if (current.resubmit_token) {
+      patch.resubmit_token = null;
+    }
     const { error } = await supabaseAdmin
       .from("manuscript_submissions")
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .update(patch as any)
-      .eq("id", data.id);
+      .eq("id", data.id)
+      .is("deleted_at", null);
     if (error) throw new Error(error.message);
 
     // Keep the shared workbook in step with the dashboard.
@@ -190,11 +221,11 @@ export const updateManuscriptSubmission = createServerFn({ method: "POST" })
     try {
       const { data: row } = await supabaseAdmin
         .from("manuscript_submissions")
-        .select("submitter_email, title, status, decision")
+        .select("submitter_email, title, status, decision, resubmit_token")
         .eq("id", data.id)
         .single();
       const to = (row as { submitter_email?: string } | null)?.submitter_email;
-      if (to) {
+      if (row && to) {
         const { sendTemplateEmail } = await import("./email-templates/send-email");
         await sendTemplateEmail("submission-status", to, {
           idempotencyKey: `submission-status-${data.id}-${patch.status ?? ""}-${patch.decision ?? ""}`,
@@ -203,6 +234,9 @@ export const updateManuscriptSubmission = createServerFn({ method: "POST" })
             title: (row as { title?: string }).title ?? "your manuscript",
             status: patch.status ?? (row as { status?: string }).status ?? "",
             decision: patch.decision ?? "",
+            resubmitUrl: row.resubmit_token
+              ? `https://nyrj.org/resubmit?token=${row.resubmit_token}`
+              : undefined,
           },
         });
       }

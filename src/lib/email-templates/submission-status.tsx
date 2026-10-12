@@ -17,6 +17,7 @@ export interface SubmissionStatusProps {
   decision?: string;
   authorName?: string;
   note?: string;
+  resubmitUrl?: string;
 }
 
 type Copy = { headline: string; body: string };
@@ -36,7 +37,7 @@ const STATUS_COPY: Record<string, Copy> = {
   },
   "waiting for edits": {
     headline: "Edits are required on your manuscript",
-    body: "Our editorial team has reviewed your manuscript and is requesting revisions. Please make the requested changes and upload your revised Microsoft Word file to your submission tracker. We cannot move your paper forward until the revised file is received.",
+    body: "Our editorial team has reviewed your manuscript and is requesting revisions. Please make the requested changes and upload your revised Word or PDF file to your existing paper. Use the revision link below or the Resubmit revision button in your submission tracker. Do not start a new submission.",
   },
   "secondary review": {
     headline: "Your revised manuscript is in secondary review",
@@ -64,6 +65,9 @@ const DECISION_COPY: Record<string, Copy> = {
 };
 
 function resolveCopy(status: string, decision: string): Copy {
+  if (status.trim().toLowerCase() === "waiting for edits") {
+    return STATUS_COPY["waiting for edits"];
+  }
   const d = decision.trim().toLowerCase();
   if (d && d !== "pending" && DECISION_COPY[d]) return DECISION_COPY[d];
   return (
@@ -80,6 +84,7 @@ export function SubmissionStatusEmail({
   decision = "",
   authorName = "",
   note = "",
+  resubmitUrl,
 }: SubmissionStatusProps) {
   const copy = resolveCopy(status, decision);
   return (
@@ -102,6 +107,11 @@ export function SubmissionStatusEmail({
           <Text style={{ margin: "0 0 20px", fontSize: "15px", lineHeight: "1.6" }}>
             {copy.body}
           </Text>
+          {status.trim().toLowerCase() === "waiting for edits" && resubmitUrl ? (
+            <Text style={{ margin: "0 0 20px", fontSize: "15px", lineHeight: "1.6" }}>
+              <a href={resubmitUrl}>Upload your revised manuscript</a>
+            </Text>
+          ) : null}
           <Section
             style={{
               backgroundColor: "#f1f5f9",

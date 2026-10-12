@@ -437,7 +437,7 @@ export const resolveRecommendation = createServerFn({ method: "POST" })
         .from("manuscript_submissions")
         .update({ resubmit_token: token, status: "waiting for edits" } as never)
         .eq("id", rec.submission_id)
-        .eq("decision", "pending")
+        .neq("decision", "declined")
         .is("deleted_at", null)
         .select("id")
         .maybeSingle();
@@ -568,7 +568,7 @@ async function submissionForToken(token: string) {
     manuscript_filename: string | null;
   } | null;
   if (!row) throw new Error("This upload link is no longer valid. Please reply to our email.");
-  if (row.decision !== "pending" || row.status !== "waiting for edits") {
+  if (row.decision === "declined" || row.status !== "waiting for edits") {
     throw new Error(
       "This revision link is not currently active. Please use the newest link from our editors.",
     );
@@ -576,9 +576,9 @@ async function submissionForToken(token: string) {
   return row;
 }
 
-function requirePdfFilename(filename: string) {
-  if (!filename.toLowerCase().endsWith(".pdf")) {
-    throw new Error("Please upload the revised manuscript as a PDF file.");
+function requireManuscriptFilename(filename: string) {
+  if (!/\.(pdf|doc|docx)$/i.test(filename)) {
+    throw new Error("Please upload the revised manuscript as a Word or PDF file.");
   }
 }
 
@@ -627,7 +627,7 @@ export const createRevisionUpload = createServerFn({ method: "POST" })
     const { enforceRateLimit } = await import("./rate-limit.server");
     await enforceRateLimit({ scope: "revision-upload", limit: 10, windowSeconds: 60 * 60 });
     const row = await submissionForToken(data.token);
-    requirePdfFilename(data.filename);
+    requireManuscriptFilename(data.filename);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const safe = data.filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120);
     const path = `revisions/${row.id}/v${row.current_version + 1}-${Date.now()}-${safe}`;
@@ -656,7 +656,7 @@ export const finalizeRevision = createServerFn({ method: "POST" })
     const { enforceRateLimit } = await import("./rate-limit.server");
     await enforceRateLimit({ scope: "revision-finalize", limit: 10, windowSeconds: 60 * 60 });
     const row = await submissionForToken(data.token);
-    requirePdfFilename(data.filename);
+    requireManuscriptFilename(data.filename);
     if (row.current_version !== data.expectedVersion) {
       throw new Error("A newer revision was already received. Please refresh before trying again.");
     }
@@ -724,7 +724,7 @@ export const finalizeRevision = createServerFn({ method: "POST" })
       .eq("id", row.id)
       .eq("current_version", data.expectedVersion)
       .eq("status", "waiting for edits")
-      .eq("decision", "pending")
+      .neq("decision", "declined")
       .eq("resubmit_token", data.token)
       .select("id")
       .maybeSingle();

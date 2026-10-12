@@ -326,6 +326,13 @@ function SubmitApply() {
       <section className="mx-auto max-w-3xl px-6 py-12">
         <p className="text-[10px] uppercase tracking-[0.35em] text-accent">Submit Manuscript</p>
         <h1 className="font-serif text-4xl text-primary mt-2">Apply for Publication</h1>
+        <p className="mt-4 border-l-2 border-accent bg-card px-4 py-3 text-sm">
+          Returning edits on a paper you already submitted? Open your{" "}
+          <Link to="/track" className="font-semibold underline underline-offset-2">
+            submission tracker
+          </Link>{" "}
+          and choose “Resubmit revision.” This form creates a new paper.
+        </p>
 
         <div className="mt-6 flex gap-2 text-xs uppercase tracking-widest">
           {["Files", "Declarations", "Manuscript"].map((label, i) => {

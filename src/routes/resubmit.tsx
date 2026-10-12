@@ -56,8 +56,8 @@ function ResubmitPage() {
       setError("Please choose your revised file first.");
       return;
     }
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      setError("Please choose a PDF file for the revised manuscript.");
+    if (!/\.(pdf|doc|docx)$/i.test(file.name)) {
+      setError("Please choose a Word or PDF file for the revised manuscript.");
       return;
     }
     setBusy(true);
@@ -120,14 +120,15 @@ function ResubmitPage() {
             )}
             <p className="text-sm text-muted-foreground">
               Your title, authors, abstract, declarations, reviewer assignment, and all other
-              submission details are already saved. This replaces only the current manuscript PDF on
-              the same paper — it does not create a new submission or assign a new initial reviewer.
+              submission details are already saved. This replaces only the current manuscript file
+              on the same paper — it does not create a new submission or assign a new initial
+              reviewer.
             </p>
             <div>
               <p className="text-[10px] uppercase tracking-[0.25em] text-accent">Revised file</p>
               <input
                 type="file"
-                accept=".pdf,application/pdf"
+                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 className="mt-1 w-full border border-border bg-background px-3 py-2 text-sm"
               />

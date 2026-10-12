@@ -158,7 +158,9 @@ export const submitManuscript = createServerFn({ method: "POST" })
       !data.manuscriptPath ||
       filePaths.some((path) => !path.startsWith(ownedPrefix) || path.includes(".."))
     ) {
-      throw new Error("One or more uploaded files are not valid for this account.");
+      throw new Error(
+        "Your sign-in changed while the files were uploading. Please sign in again and retry. If you are returning edits for an existing paper, use its Resubmit revision link in your tracker instead of starting a new submission.",
+      );
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
