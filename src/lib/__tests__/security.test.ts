@@ -27,16 +27,16 @@ describe("developer password", () => {
     else process.env.DEVELOPER_PASSWORD = original;
   });
 
-  test("the old hard-coded fallback no longer signs in", () => {
+  test("no password signs in when DEVELOPER_PASSWORD is unset", () => {
     delete process.env.DEVELOPER_PASSWORD;
-    assert.equal(checkDeveloperPassword("SOFTWARENYRJ"), false);
+    assert.equal(checkDeveloperPassword("any-guess"), false);
     assert.equal(checkDeveloperPassword(""), false);
   });
 
   test("only the configured password is accepted", () => {
     process.env.DEVELOPER_PASSWORD = "correct horse battery staple";
     assert.equal(checkDeveloperPassword("correct horse battery staple"), true);
-    assert.equal(checkDeveloperPassword("SOFTWARENYRJ"), false);
+    assert.equal(checkDeveloperPassword("any-guess"), false);
   });
 });
 

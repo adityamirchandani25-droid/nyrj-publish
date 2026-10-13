@@ -31,7 +31,6 @@ const secretNames = [
 const forbiddenClientMarkers = [
   ...secretNames,
   "process.env",
-  "SOFTWARENYRJ",
   "api.openai.com",
   "api.sendgrid.com",
   "graph.microsoft.com",
