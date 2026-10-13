@@ -26,6 +26,20 @@ export type Session = {
 };
 
 const KEY = "nyrj.session.v1";
+const PRODUCTION_AUTH_ORIGIN = "https://nyrj.org";
+
+/**
+ * Auth links must always return to the public journal in hosted environments.
+ * Using window.location.origin unconditionally lets preview/proxy hosts leak
+ * into confirmation emails and makes Supabase fall back to its Site URL when
+ * that origin is not allow-listed.
+ */
+export function authRedirectUrl(path: `/${string}`): string {
+  const browserOrigin = typeof window === "undefined" ? null : window.location.origin;
+  const browserHost = typeof window === "undefined" ? "" : window.location.hostname;
+  const localBrowser = ["localhost", "127.0.0.1", "0.0.0.0"].includes(browserHost);
+  return new URL(path, localBrowser && browserOrigin ? browserOrigin : PRODUCTION_AUTH_ORIGIN).href;
+}
 
 // Service outages should never be reported to a person as a wrong password.
 const OUTAGE_MESSAGE =
@@ -190,8 +204,7 @@ export function staffToken(): string {
 
 // ---- Students (researchers) — Email + Password ----
 export async function signUpStudent(email: string, password: string, fullName?: string) {
-  const emailRedirectTo =
-    typeof window === "undefined" ? undefined : `${window.location.origin}/login?account=student`;
+  const emailRedirectTo = authRedirectUrl("/login?account=student");
   const { data, error } = await supabase.auth.signUp({
     email: email.trim().toLowerCase(),
     password,
@@ -233,7 +246,7 @@ export async function signInStudentWithGoogle() {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${window.location.origin}/login`,
+      redirectTo: authRedirectUrl("/login?account=student"),
     },
   });
   if (error) throw error;
@@ -242,8 +255,7 @@ export async function signInStudentWithGoogle() {
 
 export async function resendStudentConfirmation(email: string) {
   const normalized = email.trim().toLowerCase();
-  const emailRedirectTo =
-    typeof window === "undefined" ? undefined : `${window.location.origin}/login?account=student`;
+  const emailRedirectTo = authRedirectUrl("/login?account=student");
   const { error } = await supabase.auth.resend({
     type: "signup",
     email: normalized,

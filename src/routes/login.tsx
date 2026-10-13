@@ -3,6 +3,7 @@ import { useEffect, useId, useState, type FormEvent } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
 import { AuthorDashboard } from "@/components/AuthorDashboard";
 import {
+  authRedirectUrl,
   bridgeSupabaseSession,
   getSession,
   isResearcher,
@@ -518,7 +519,7 @@ function StudentOtpForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
     setNotice(null);
     try {
       const { error: rErr } = await supabase.auth.resetPasswordForEmail(normalized, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: authRedirectUrl("/reset-password"),
       });
       if (rErr) throw rErr;
       setNotice(

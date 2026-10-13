@@ -1,1 +1,38 @@
 project_id = "udetpvcgkgvbevyxhxph"
+
+[auth]
+# Keep the hosted Auth service aligned with the public journal. If a requested
+# redirect ever fails allow-list validation, Supabase falls back to site_url,
+# so this value must never point at a developer machine.
+site_url = "https://nyrj.org"
+additional_redirect_urls = [
+  "https://nyrj.org/**",
+  "https://www.nyrj.org/**",
+  "http://localhost:8080/**",
+  "http://127.0.0.1:8080/**",
+]
+
+[auth.rate_limit]
+# Custom SMTP is protected by Supabase's per-IP auth limits as well; this
+# project-wide ceiling leaves room for signups, resends, and password resets.
+email_sent = 100
+
+# Preserve the production Auth settings when `supabase config push` merges
+# this tracked file with CLI defaults.
+[auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"
+otp_length = 8
+
+[auth.email.smtp]
+enabled = true
+host = "smtp.sendgrid.net"
+port = 587
+user = "apikey"
+pass = "env(SENDGRID_API_KEY)"
+admin_email = "noreply@nyrj.org"
+sender_name = "National Youth Research Journal"
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
