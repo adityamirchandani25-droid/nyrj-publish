@@ -122,23 +122,34 @@ export const assignReviewer = createServerFn({ method: "POST" })
 
     const { data: sub, error: subErr } = await supabaseAdmin
       .from("manuscript_submissions")
-      .select("id, title, keywords, research_domain")
+      .select("id, title, keywords, research_domain, status, decision, deleted_at")
       .eq("id", data.submissionId)
       .single();
     if (subErr || !sub) throw new Error("Submission not found.");
+    if (
+      sub.deleted_at ||
+      sub.decision === "declined" ||
+      ["waiting for edits", "published"].includes(sub.status)
+    ) {
+      throw new Error("This manuscript is closed and cannot receive new reviewer invitations.");
+    }
 
     // Bound outbound invitations so a staff session cannot be used to blast
-    // unsolicited mail: no duplicates, and at most 6 reviewers per manuscript.
+    // unsolicited mail. Failed/declined invitations do not consume the cap so
+    // staff can still appoint replacements after several non-responses.
     const reviewerEmail = data.reviewerEmail.trim().toLowerCase();
     const { data: existingInvites } = await supabaseAdmin
       .from("review_assignments")
-      .select("reviewer_email")
+      .select("reviewer_email, status")
       .eq("submission_id", data.submissionId);
-    const invites = (existingInvites ?? []) as Array<{ reviewer_email: string }>;
+    const invites = (existingInvites ?? []) as Array<{ reviewer_email: string; status: string }>;
     if (invites.some((r) => (r.reviewer_email ?? "").toLowerCase() === reviewerEmail)) {
       throw new Error("That reviewer has already been invited to this manuscript.");
     }
-    if (invites.length >= 6) {
+    const countedInvites = invites.filter(
+      (invite) => !["declined", "no_response"].includes(invite.status),
+    );
+    if (countedInvites.length >= 6) {
       throw new Error("This manuscript already has the maximum number of reviewer invitations.");
     }
 
@@ -203,7 +214,7 @@ export const resendReviewerInvitation = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: a } = await supabaseAdmin
       .from("review_assignments")
-      .select("submission_id, reviewer_email, reviewer_name, due_at, invite_token")
+      .select("submission_id, reviewer_email, reviewer_name, due_at, invite_token, status")
       .eq("id", data.assignmentId)
       .single();
     if (!a) throw new Error("Assignment not found.");
@@ -213,13 +224,32 @@ export const resendReviewerInvitation = createServerFn({ method: "POST" })
       reviewer_name: string;
       due_at: string;
       invite_token: string;
+      status: string;
     };
+    if (!["invited", "accepted"].includes(r.status)) {
+      throw new Error("This reviewer invitation is no longer active.");
+    }
     const { data: sub } = await supabaseAdmin
       .from("manuscript_submissions")
-      .select("title, keywords, research_domain")
+      .select("title, keywords, research_domain, status, decision, deleted_at")
       .eq("id", r.submission_id)
       .single();
-    const s = (sub ?? {}) as { title?: string; keywords?: string; research_domain?: string };
+    const s = (sub ?? {}) as {
+      title?: string;
+      keywords?: string;
+      research_domain?: string;
+      status?: string;
+      decision?: string;
+      deleted_at?: string | null;
+    };
+    if (
+      !sub ||
+      s.deleted_at ||
+      s.decision === "declined" ||
+      ["waiting for edits", "published"].includes(s.status ?? "")
+    ) {
+      throw new Error("This manuscript is closed and the invitation cannot be resent.");
+    }
     const { sendTemplateEmail } = await import("./email-templates/send-email");
     await sendTemplateEmail("reviewer-invitation", r.reviewer_email, {
       idempotencyKey: `reviewer-invite-resend-${data.assignmentId}-${Date.now()}`,

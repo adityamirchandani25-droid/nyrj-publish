@@ -30,6 +30,7 @@ const tables = [
   "team_members",
   "peer_reviewers",
   "review_assignments",
+  "peer_review_email_replies",
   "review_audit_log",
   "initial_reviewers",
   "editor_accounts",
@@ -41,10 +42,25 @@ const tables = [
 const report = {
   project: new URL(url).hostname.split(".")[0],
   tables: {},
+  schema: {},
   auth: {},
   storage: {},
 };
 let failed = false;
+
+const requiredAutomationColumns = {
+  manuscript_submissions: [
+    "revision_requested_at",
+    "revision_reminder_sent_at",
+    "revision_staff_alert_sent_at",
+  ],
+  initial_reviewers: ["workload_reminder_sent_on"],
+  review_assignments: [
+    "no_response_notified_at",
+    "no_response_followup_sent_at",
+    "followup_staff_notified_at",
+  ],
+};
 
 async function listStorageTree(bucket, prefix = "") {
   const objects = [];
@@ -89,6 +105,29 @@ for (const table of tables) {
     report.tables[table] = {
       accessible: false,
       status: response.status,
+      code: body.code,
+      message: body.message || response.statusText,
+    };
+  }
+}
+
+for (const [table, columns] of Object.entries(requiredAutomationColumns)) {
+  const response = await fetch(
+    `${url}/rest/v1/${table}?select=${encodeURIComponent(columns.join(","))}&limit=0`,
+    {
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+      },
+    },
+  );
+  if (response.ok) {
+    report.schema[table] = { requiredColumnsPresent: true };
+  } else {
+    failed = true;
+    const body = await response.json().catch(() => ({}));
+    report.schema[table] = {
+      requiredColumnsPresent: false,
       code: body.code,
       message: body.message || response.statusText,
     };

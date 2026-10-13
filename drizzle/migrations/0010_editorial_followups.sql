@@ -13,4 +13,4 @@ ALTER TABLE public.review_assignments
 
 CREATE INDEX IF NOT EXISTS manuscript_submissions_revision_followup_idx
   ON public.manuscript_submissions (revision_requested_at)
-  WHERE status = 'waiting for edits' AND decision = 'pending';
+  WHERE status = 'waiting for edits' AND decision <> 'declined';

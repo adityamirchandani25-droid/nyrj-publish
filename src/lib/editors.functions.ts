@@ -544,6 +544,7 @@ export const listVersions = createServerFn({ method: "POST" })
 /* ------------------------- author resubmission ---------------------------- */
 
 const ResubmitToken = z.object({ token: z.string().trim().min(10).max(200) });
+const MAX_REVISION_BYTES = 25 * 1024 * 1024;
 
 async function submissionForToken(token: string) {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -621,7 +622,10 @@ export const getResubmitInfo = createServerFn({ method: "POST" })
 /** Signed upload URL so the browser can send the file straight to storage. */
 export const createRevisionUpload = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
-    ResubmitToken.extend({ filename: z.string().trim().min(1).max(260) }).parse(d),
+    ResubmitToken.extend({
+      filename: z.string().trim().min(1).max(260),
+      size: z.number().int().min(1).max(MAX_REVISION_BYTES),
+    }).parse(d),
   )
   .handler(async ({ data }) => {
     const { enforceRateLimit } = await import("./rate-limit.server");
@@ -678,7 +682,12 @@ export const finalizeRevision = createServerFn({ method: "POST" })
       .list(folder, { search: objectName, limit: 10 });
     const stored = storedObjects?.find((object) => object.name === objectName);
     if (objectError || !stored)
-      throw new Error("The PDF upload was not completed. Please try again.");
+      throw new Error("The manuscript upload was not completed. Please try again.");
+    const storedSize = Number((stored.metadata as { size?: number } | null)?.size ?? 0);
+    if (storedSize > MAX_REVISION_BYTES) {
+      await supabaseAdmin.storage.from("submissions").remove([data.path]);
+      throw new Error("The revised manuscript must be 25 MB or smaller.");
+    }
 
     // Preserve the file that was current before replacing the pointer. On the
     // first revision this records v1; later revisions are already represented.

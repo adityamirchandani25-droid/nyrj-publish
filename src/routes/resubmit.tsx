@@ -60,10 +60,16 @@ function ResubmitPage() {
       setError("Please choose a Word or PDF file for the revised manuscript.");
       return;
     }
+    if (file.size > 25 * 1024 * 1024) {
+      setError("Please choose a file that is 25 MB or smaller.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const signed = await createRevisionUpload({ data: { token, filename: file.name } });
+      const signed = await createRevisionUpload({
+        data: { token, filename: file.name, size: file.size },
+      });
       const { error: upErr } = await supabase.storage
         .from("submissions")
         .uploadToSignedUrl(signed.path, signed.token, file);

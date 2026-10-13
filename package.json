@@ -8,7 +8,7 @@
     "build": "vite build && node scripts/check-client-secrets.mjs",
     "build:dev": "vite build --mode development",
     "audit:supabase": "node --env-file=.env.local scripts/audit-supabase.mjs",
-    "preview": "vite preview",
+    "preview": "nitro preview",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

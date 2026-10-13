@@ -232,7 +232,7 @@ export async function runReviewReminders(): Promise<{
       if (
         !sub ||
         sub.deleted_at ||
-        sub.decision !== "pending" ||
+        sub.decision === "declined" ||
         (r.followup_staff_notified_at &&
           Date.parse(r.followup_staff_notified_at) >= Date.parse(reminderAt))
       )
@@ -282,7 +282,7 @@ export async function runReviewReminders(): Promise<{
       .filter((value): value is string => Boolean(value))
       .sort((a, b) => Date.parse(b) - Date.parse(a))[0];
     if (latestReminderAt) await notifyStaffOfFollowup(latestReminderAt);
-    if (!sub || sub.deleted_at || sub.decision !== "pending") continue;
+    if (!sub || sub.deleted_at || sub.decision === "declined") continue;
 
     if (deadlinePassed) {
       const { data: expired, error: expireError } = await supabaseAdmin

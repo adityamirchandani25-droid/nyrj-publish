@@ -26,7 +26,7 @@ export async function runEditorialFollowups(): Promise<{
       "id, title, submitter_email, resubmit_token, revision_requested_at, revision_reminder_sent_at, revision_staff_alert_sent_at",
     )
     .is("deleted_at", null)
-    .eq("decision", "pending")
+    .neq("decision", "declined")
     .eq("status", "waiting for edits")
     .not("revision_requested_at", "is", null)
     .lte("revision_requested_at", tenDaysAgo)
