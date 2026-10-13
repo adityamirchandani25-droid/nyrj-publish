@@ -3,8 +3,10 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 type DeveloperTokenPurpose = "tools";
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
 
-function password(): string {
-  return process.env.DEVELOPER_PASSWORD?.trim() || "SOFTWARENYRJ";
+// The password must come from the server environment. A literal fallback in
+// this public repository would let anyone sign in to the developer tools.
+function password(): string | null {
+  return process.env.DEVELOPER_PASSWORD?.trim() || null;
 }
 
 function signingSecret(): string {
@@ -18,9 +20,11 @@ function digest(value: string, key: string): Buffer {
 }
 
 export function checkDeveloperPassword(candidate: string): boolean {
+  const expected = password();
+  if (!expected) return false;
   return timingSafeEqual(
     digest(candidate, "nyrj-developer-password"),
-    digest(password(), "nyrj-developer-password"),
+    digest(expected, "nyrj-developer-password"),
   );
 }
 

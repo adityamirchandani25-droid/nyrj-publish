@@ -97,7 +97,8 @@ export const registerEditor = createServerFn({ method: "POST" })
     } as never);
     if (error) {
       if (error.code === "23505") throw new Error("That email or username is already registered.");
-      throw new Error(error.message);
+      console.error("[server] registerEditor error:", error);
+      throw new Error("Could not create the account. Please try again.");
     }
     await audit(null, data.email.toLowerCase(), "Editor account requested", data.name);
     return { ok: true };

@@ -3,6 +3,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { MASTER_STAFF_EMAILS } from "./staff-recipients";
+import { escapeLikePattern, sameEmail } from "./like-pattern";
 
 const STAFF_RECIPIENTS = MASTER_STAFF_EMAILS;
 
@@ -46,17 +47,21 @@ async function requireInitialReviewer(context: AuthContext) {
   const { data, error } = await supabaseAdmin
     .from("initial_reviewers")
     .select("id, name, email, portal_enabled, auth_user_id")
-    .ilike("email", email)
-    .maybeSingle();
+    .ilike("email", escapeLikePattern(email))
+    .limit(10);
 
   if (error) throw new Error("We could not verify your reviewer access. Please try again.");
-  const reviewer = data as {
-    id: string;
-    name: string;
-    email: string;
-    portal_enabled: boolean;
-    auth_user_id: string | null;
-  } | null;
+  // ILIKE is only a case-insensitive prefilter; access requires an exact match.
+  const reviewer =
+    (
+      (data ?? []) as Array<{
+        id: string;
+        name: string;
+        email: string;
+        portal_enabled: boolean;
+        auth_user_id: string | null;
+      }>
+    ).find((row) => sameEmail(row.email, email)) ?? null;
   if (!reviewer?.portal_enabled) {
     throw new Error("This account does not have access to the initial reviewer portal.");
   }
@@ -142,18 +147,21 @@ export const createInitialReviewerAccount = createServerFn({ method: "POST" })
     const { data: reviewerData, error: reviewerError } = await supabaseAdmin
       .from("initial_reviewers")
       .select("id, name, email, auth_user_id")
-      .ilike("email", email)
-      .maybeSingle();
+      .ilike("email", escapeLikePattern(email))
+      .limit(10);
     if (reviewerError) {
       console.error("[initial-reviewer] account lookup failed:", reviewerError);
       throw new Error("We could not start account setup. Please try again.");
     }
-    const reviewer = reviewerData as {
-      id: string;
-      name: string;
-      email: string;
-      auth_user_id: string | null;
-    } | null;
+    const reviewer =
+      (
+        (reviewerData ?? []) as Array<{
+          id: string;
+          name: string;
+          email: string;
+          auth_user_id: string | null;
+        }>
+      ).find((row) => sameEmail(row.email, email)) ?? null;
     const reviewerName =
       reviewer?.name ||
       email
@@ -325,44 +333,51 @@ export const getInitialReviewerDesk = createServerFn({ method: "GET" })
       const { data: rows, error } = await supabaseAdmin
         .from("manuscript_submissions")
         .select(
-          "id, title, status, decision, created_at, keywords, research_domain, abstract, manuscript_path, manuscript_filename",
+          "id, title, status, decision, created_at, keywords, research_domain, abstract, manuscript_path, manuscript_filename, initial_reviewer_email",
         )
-        .ilike("initial_reviewer_email", reviewer.email)
+        .ilike("initial_reviewer_email", escapeLikePattern(reviewer.email))
         .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(200);
       if (error) throw new Error("Could not load your assigned manuscripts.");
 
-      const submissions = (rows ?? []) as Array<{
-        id: string;
-        title: string;
-        status: string;
-        decision: string;
-        created_at: string;
-        keywords: string;
-        research_domain: string;
-        abstract: string | null;
-        manuscript_path: string | null;
-        manuscript_filename: string | null;
-      }>;
+      const submissions = (
+        (rows ?? []) as Array<{
+          id: string;
+          title: string;
+          status: string;
+          decision: string;
+          created_at: string;
+          keywords: string;
+          research_domain: string;
+          abstract: string | null;
+          manuscript_path: string | null;
+          manuscript_filename: string | null;
+          initial_reviewer_email: string;
+        }>
+      ).filter((row) => sameEmail(row.initial_reviewer_email, reviewer.email));
       const ids = submissions.map((row) => row.id);
       const latest = new Map<string, InitialReviewAssignment["recommendation"]>();
       if (ids.length) {
         const { data: recommendations } = await supabaseAdmin
           .from("editor_recommendations")
-          .select("id, submission_id, action, comments, status, created_at, staff_message")
+          .select(
+            "id, submission_id, editor_email, action, comments, status, created_at, staff_message",
+          )
           .in("submission_id", ids)
-          .ilike("editor_email", reviewer.email)
+          .ilike("editor_email", escapeLikePattern(reviewer.email))
           .order("created_at", { ascending: false });
         for (const item of (recommendations ?? []) as Array<{
           id: string;
           submission_id: string;
+          editor_email: string;
           action: string;
           comments: string;
           status: string;
           created_at: string;
           staff_message: string;
         }>) {
+          if (!sameEmail(item.editor_email, reviewer.email)) continue;
           if (!latest.has(item.submission_id)) {
             latest.set(item.submission_id, {
               id: item.id,
@@ -387,8 +402,9 @@ export const getInitialReviewerDesk = createServerFn({ method: "GET" })
             });
           downloadUrl = signed?.signedUrl ?? null;
         }
+        const { initial_reviewer_email: _assignedTo, ...assignment } = row;
         assignments.push({
-          ...row,
+          ...assignment,
           download_url: downloadUrl,
           recommendation: latest.get(row.id) ?? null,
         });
@@ -431,7 +447,7 @@ export const submitInitialReview = createServerFn({ method: "POST" })
       initial_reviewer_email: string;
     } | null;
     if (!row) throw new Error("That manuscript is no longer available.");
-    if ((row.initial_reviewer_email ?? "").trim().toLowerCase() !== reviewer.email) {
+    if (!sameEmail(row.initial_reviewer_email, reviewer.email)) {
       throw new Error("This manuscript is not assigned to your account.");
     }
     if (row.decision !== "pending")
@@ -451,14 +467,17 @@ export const submitInitialReview = createServerFn({ method: "POST" })
       throw new Error("This manuscript has already advanced beyond initial review.");
     }
 
-    const { data: pending } = await supabaseAdmin
+    const { data: pending, error: pendingError } = await supabaseAdmin
       .from("editor_recommendations")
-      .select("id")
+      .select("editor_email")
       .eq("submission_id", data.submissionId)
-      .ilike("editor_email", reviewer.email)
+      .ilike("editor_email", escapeLikePattern(reviewer.email))
       .eq("status", "pending")
-      .maybeSingle();
-    if (pending) throw new Error("Your latest review is already waiting for staff approval.");
+      .limit(20);
+    if (pendingError) throw new Error("Could not submit your review. Please try again.");
+    if ((pending ?? []).some((rec) => sameEmail(rec.editor_email, reviewer.email))) {
+      throw new Error("Your latest review is already waiting for staff approval.");
+    }
 
     const { error } = await supabaseAdmin.from("editor_recommendations").insert({
       submission_id: data.submissionId,

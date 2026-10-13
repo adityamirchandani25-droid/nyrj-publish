@@ -1,6 +1,7 @@
 // Sponsors: public listing + staff-only create/delete.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { safeHttpUrl } from "./safe-url";
 
 export type SponsorRow = {
   id: string;
@@ -44,7 +45,8 @@ export const sponsorsList = createServerFn({ method: "GET" }).handler(async () =
   const out: SponsorRow[] = [];
   for (const r of rows) {
     const { logo_path, ...rest } = r;
-    out.push({ ...rest, logo_url: await signLogo(logo_path) });
+    // Rows saved before http(s) validation existed are re-checked on read.
+    out.push({ ...rest, website: safeHttpUrl(rest.website), logo_url: await signLogo(logo_path) });
   }
   return out;
 });
@@ -55,7 +57,13 @@ const CreateSchema = z.object({
   tier: z
     .enum(["founding", "partner", "gold", "silver", "bronze", "supporter"])
     .default("supporter"),
-  website: z.string().trim().url().max(500).optional().or(z.literal("")),
+  website: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((value) => safeHttpUrl(value) !== null, "Website must be an http(s) URL.")
+    .optional()
+    .or(z.literal("")),
   blurb: z.string().trim().max(500).optional(),
   position: z.number().int().min(0).max(9999).optional(),
   logoBase64: z.string().max(3_000_000).optional(),

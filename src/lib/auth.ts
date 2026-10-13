@@ -168,10 +168,9 @@ export async function loginAmbassador(
   if (!displayName.trim()) return { ok: false, error: "Please enter your name." };
   if (!password.trim()) return { ok: false, error: "Password is required." };
   try {
-    // Trial-set the current value to itself; server will reject if pw is wrong.
-    const { getStudentsImpacted, setStudentsImpacted } = await import("./ambassadors.functions");
-    const current = await getStudentsImpacted();
-    await setStudentsImpacted({ data: { password, value: current } });
+    // Read-only check; the server rejects (and throttles) a wrong password.
+    const { ambassadorLogin } = await import("./ambassadors.functions");
+    await ambassadorLogin({ data: { password } });
     writeSession({
       role: "ambassador",
       username: displayName.trim(),

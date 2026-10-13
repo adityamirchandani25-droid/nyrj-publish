@@ -10,6 +10,7 @@
     "audit:supabase": "node --env-file=.env.local scripts/audit-supabase.mjs",
     "preview": "nitro preview",
     "lint": "eslint .",
+    "test": "node --test \"src/**/*.test.ts\"",
     "format": "prettier --write ."
   },
   "dependencies": {

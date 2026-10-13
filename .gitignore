@@ -46,3 +46,6 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Local source snapshots (an old one contained a .env file)
+*.zip

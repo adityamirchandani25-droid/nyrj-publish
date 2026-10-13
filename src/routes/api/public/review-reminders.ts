@@ -5,10 +5,9 @@ import { createFileRoute } from "@tanstack/react-router";
  * Vercel sends CRON_SECRET as a bearer token for the daily production cron.
  */
 async function run(request: Request) {
-  const secret = process.env["CRON_SECRET"];
-  if (!secret) return new Response("Not configured", { status: 500 });
-  const auth = request.headers.get("authorization") ?? "";
-  if (auth !== `Bearer ${secret}`) return new Response("Unauthorized", { status: 401 });
+  const { rejectUnauthorizedCron } = await import("@/lib/cron-auth.server");
+  const rejected = rejectUnauthorizedCron(request);
+  if (rejected) return rejected;
 
   const { runReviewReminders } = await import("@/lib/peer-review.server");
   const { sweepInitialAssignments } = await import("@/lib/initial-reviewers.server");

@@ -51,9 +51,23 @@ async function authorize(auth: { password?: string; staffToken?: string }) {
     verifyStaffToken(auth.staffToken);
     return;
   }
-  const { assertAmbassador } = await import("./ambassador-auth.server");
-  assertAmbassador(auth.password ?? "");
+  const { checkAmbassadorPassword } = await import("./ambassador-auth.server");
+  if (!checkAmbassadorPassword(auth.password ?? "")) {
+    // The shared password is intentionally memorable, so wrong guesses are
+    // throttled per client to stop it being brute-forced.
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({ scope: "ambassador-auth", limit: 10, windowSeconds: 10 * 60 });
+    throw new Error("Incorrect ambassador password.");
+  }
 }
+
+/** Validates the shared ambassador password without changing any data. */
+export const ambassadorLogin = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => z.object({ password: z.string().min(1).max(500) }).parse(d))
+  .handler(async ({ data }) => {
+    await authorize({ password: data.password });
+    return { ok: true as const };
+  });
 
 const CHAPTER_COLUMNS =
   "id, chapter_number, school_name, location, chapter_lead, chapter_lead_email, chapter_lead_2, chapter_lead_2_email, about, lead_photo_path, slug, new_students_this_year, notes, created_at, updated_at";

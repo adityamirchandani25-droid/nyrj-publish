@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { escapeLikePattern } from "./like-pattern";
 
 const StaffSchema = z.object({ staffToken: z.string().min(1) });
 
@@ -126,7 +127,7 @@ export const removeInitialReviewer = createServerFn({ method: "POST" })
     const { count, error: countError } = await supabaseAdmin
       .from("manuscript_submissions")
       .select("id", { count: "exact", head: true })
-      .ilike("initial_reviewer_email", reviewer.email)
+      .ilike("initial_reviewer_email", escapeLikePattern(reviewer.email))
       .eq("decision", "pending")
       .neq("status", "published")
       .is("deleted_at", null);

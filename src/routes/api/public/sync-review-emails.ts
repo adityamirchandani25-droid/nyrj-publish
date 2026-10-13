@@ -1,11 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 async function run(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return new Response("Not configured", { status: 500 });
-  if (request.headers.get("authorization") !== `Bearer ${secret}`) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  const { rejectUnauthorizedCron } = await import("@/lib/cron-auth.server");
+  const rejected = rejectUnauthorizedCron(request);
+  if (rejected) return rejected;
   try {
     const { syncGmailReviewReplies } = await import("@/lib/gmail-review-sync.server");
     const result = await syncGmailReviewReplies();

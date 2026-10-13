@@ -6,10 +6,9 @@ import { createFileRoute } from "@tanstack/react-router";
  * Protected with the Vercel cron secret; safe to call daily.
  */
 async function run(request: Request) {
-  const secret = process.env["CRON_SECRET"];
-  if (!secret) return new Response("Not configured", { status: 500 });
-  const auth = request.headers.get("authorization") ?? "";
-  if (auth !== `Bearer ${secret}`) return new Response("Unauthorized", { status: 401 });
+  const { rejectUnauthorizedCron } = await import("@/lib/cron-auth.server");
+  const rejected = rejectUnauthorizedCron(request);
+  if (rejected) return rejected;
 
   const { syncCitationCounts } = await import("@/lib/citations.server");
   try {

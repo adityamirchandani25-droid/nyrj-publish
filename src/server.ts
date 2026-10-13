@@ -37,18 +37,47 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   });
 }
 
+// Baseline hardening for every server response. frame-ancestors stops other
+// sites from framing the staff dashboard (clickjacking); the referrer policy
+// keeps tokenized review and resubmission URLs from leaking to other origins.
+const SECURITY_HEADERS: Record<string, string> = {
+  "Content-Security-Policy": "frame-ancestors 'self'",
+  "X-Frame-Options": "SAMEORIGIN",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Strict-Transport-Security": "max-age=63072000",
+};
+
+function withSecurityHeaders(response: Response): Response {
+  let secured = response;
+  try {
+    for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+      if (!secured.headers.has(name)) secured.headers.set(name, value);
+    }
+  } catch {
+    // Some responses carry immutable headers; copy them into a mutable one.
+    secured = new Response(response.body, response);
+    for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+      if (!secured.headers.has(name)) secured.headers.set(name, value);
+    }
+  }
+  return secured;
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      return withSecurityHeaders(await normalizeCatastrophicSsrResponse(response));
     } catch (error) {
       console.error(error);
-      return new Response(renderErrorPage(), {
-        status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
+      return withSecurityHeaders(
+        new Response(renderErrorPage(), {
+          status: 500,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+      );
     }
   },
 };

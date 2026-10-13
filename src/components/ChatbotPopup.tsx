@@ -4,6 +4,7 @@ import { Sparkles, X, Send } from "lucide-react";
 import { chatAssistant } from "@/lib/chat.functions";
 import { verifyDeveloperCode } from "@/lib/developer-auth.functions";
 import { getSession, isDeveloper } from "@/lib/auth";
+import { chatLinkPattern } from "@/lib/chat-links";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -211,11 +212,11 @@ export function ChatbotPopup() {
 }
 
 // Turn Markdown-style [label](/path) links in assistant replies into clickable
-// same-origin links. We only allow paths that start with "/" so nothing external
-// can be injected via the model output.
+// same-origin links. chatLinkPattern only allows a single leading "/" so nothing
+// external can be injected via the model output.
 function renderWithLinks(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
-  const regex = /\[([^\]]+)\]\((\/[a-zA-Z0-9/_\-.$?=&#]*)\)/g;
+  const regex = chatLinkPattern();
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   let key = 0;

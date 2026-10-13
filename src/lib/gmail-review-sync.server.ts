@@ -57,6 +57,34 @@ function senderAddress(raw: string): string {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) ? address.toLowerCase() : "";
 }
 
+function domainsAlign(a: string, b: string): boolean {
+  return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
+}
+
+/**
+ * The From header is trivially forged, so a reply is only trusted when the
+ * receiving server (Gmail) recorded that the sender's domain authenticated it:
+ * DMARC passed, or SPF/DKIM passed for a domain aligned with the From address.
+ * Gmail prepends its own Authentication-Results header, so the first one wins.
+ */
+export function senderAuthenticated(authenticationResults: string, sender: string): boolean {
+  const results = authenticationResults.toLowerCase();
+  const senderDomain = sender.split("@")[1] ?? "";
+  if (!results || !senderDomain) return false;
+  const dmarc = results.match(/\bdmarc=(\w+)/)?.[1];
+  if (dmarc === "pass") return true;
+  if (dmarc === "fail") return false;
+  for (const match of results.matchAll(
+    /\bdkim=pass\b[^;]*?\bheader\.(?:i=[^@\s;]*@|d=)([a-z0-9.-]+)/g,
+  )) {
+    if (domainsAlign(match[1], senderDomain)) return true;
+  }
+  const spfDomain = results.match(
+    /\bspf=pass\b[^;]*?\bsmtp\.mailfrom=(?:[^@\s;]*@)?([a-z0-9.-]+)/,
+  )?.[1];
+  return Boolean(spfDomain && domainsAlign(spfDomain, senderDomain));
+}
+
 function findAssignment(
   sender: string,
   subject: string,
@@ -182,6 +210,10 @@ export async function syncGmailReviewReplies(): Promise<{
       checked++;
       const sender = senderAddress(header(message.payload, "from"));
       if (!sender || sender === MAILBOX.toLowerCase()) return;
+      if (!senderAuthenticated(header(message.payload, "authentication-results"), sender)) {
+        unmatched++;
+        return;
+      }
       const subject = header(message.payload, "subject").slice(0, 500);
       const receivedAt = Number(message.internalDate);
       if (!Number.isFinite(receivedAt)) return;

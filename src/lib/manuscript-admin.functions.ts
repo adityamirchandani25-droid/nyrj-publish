@@ -283,24 +283,56 @@ export const purgeManuscriptSubmission = createServerFn({ method: "POST" })
     const { verifyStaffToken } = await import("./staff-auth.server");
     verifyStaffToken(data.staffToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row } = await supabaseAdmin
+    const { data: row, error: rowError } = await supabaseAdmin
       .from("manuscript_submissions")
-      .select("manuscript_path, supplementary_paths")
+      .select("manuscript_path, supplementary_paths, consent_form_paths, deleted_at")
       .eq("id", data.id)
       .maybeSingle();
-    const paths: string[] = [];
-    if (row) {
-      const r = row as { manuscript_path: string | null; supplementary_paths: Json };
-      if (r.manuscript_path) paths.push(r.manuscript_path);
-      if (Array.isArray(r.supplementary_paths)) {
-        for (const s of r.supplementary_paths as Array<{ path?: string }>) {
-          if (s?.path) paths.push(s.path);
-        }
+    if (rowError) throw new Error(rowError.message);
+    if (!row) throw new Error("Submission not found.");
+    // Permanent deletion is only offered from the trash; a live paper must be
+    // moved there first so one mistaken click cannot destroy it.
+    if (!row.deleted_at) throw new Error("Move this paper to the trash before deleting it.");
+
+    const { data: versions, error: versionsError } = await supabaseAdmin
+      .from("manuscript_versions")
+      .select("manuscript_path")
+      .eq("submission_id", data.id);
+    if (versionsError) throw new Error(versionsError.message);
+
+    const paths = new Set<string>();
+    if (row.manuscript_path) paths.add(row.manuscript_path);
+    for (const refs of [row.supplementary_paths, row.consent_form_paths]) {
+      if (!Array.isArray(refs)) continue;
+      for (const ref of refs as Array<{ path?: string } | null>) {
+        if (ref?.path) paths.add(ref.path);
       }
     }
-    if (paths.length > 0) await supabaseAdmin.storage.from("submissions").remove(paths);
-    const { error } = await supabaseAdmin.from("manuscript_submissions").delete().eq("id", data.id);
+    for (const version of versions ?? []) {
+      if (version.manuscript_path) paths.add(version.manuscript_path);
+    }
+
+    // Delete the records first: if storage cleanup then fails, the result is
+    // an orphaned file rather than a live record pointing at missing files.
+    const { error } = await supabaseAdmin
+      .from("manuscript_submissions")
+      .delete()
+      .eq("id", data.id)
+      .not("deleted_at", "is", null);
     if (error) throw new Error(error.message);
+    const { error: versionDeleteError } = await supabaseAdmin
+      .from("manuscript_versions")
+      .delete()
+      .eq("submission_id", data.id);
+    if (versionDeleteError)
+      console.error("[server] purge version cleanup failed:", versionDeleteError);
+
+    if (paths.size > 0) {
+      const { error: storageError } = await supabaseAdmin.storage
+        .from("submissions")
+        .remove([...paths]);
+      if (storageError) console.error("[server] purge storage cleanup failed:", storageError);
+    }
     return { ok: true };
   });
 
