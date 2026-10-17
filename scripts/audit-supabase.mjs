@@ -134,6 +134,24 @@ for (const [table, columns] of Object.entries(requiredAutomationColumns)) {
   }
 }
 
+const { data: revisionIntegrity, error: revisionIntegrityError } = await admin.rpc(
+  "revision_integrity_healthcheck",
+);
+const revisionConstraintsPresent =
+  !revisionIntegrityError &&
+  revisionIntegrity?.version_unique_index === true &&
+  revisionIntegrity?.token_unique_index === true;
+report.schema.revisionIntegrity = revisionIntegrityError
+  ? {
+      ready: false,
+      error: revisionIntegrityError.message,
+    }
+  : {
+      ready: revisionConstraintsPresent,
+      ...revisionIntegrity,
+    };
+if (!revisionConstraintsPresent) failed = true;
+
 const {
   data: libraryRows,
   error: libraryError,
@@ -158,6 +176,46 @@ for (const bucket of requiredBuckets) {
       accessible: false,
       error: error instanceof Error ? error.message : String(error),
     };
+  }
+}
+
+const { data: openRevisions, error: openRevisionsError } = await admin
+  .from("manuscript_submissions")
+  .select("id,current_version")
+  .eq("status", "waiting for edits")
+  .neq("decision", "declined")
+  .is("deleted_at", null)
+  .not("resubmit_token", "is", null);
+if (openRevisionsError) {
+  report.storage.revisions = { error: openRevisionsError.message };
+  failed = true;
+} else {
+  let strandedUploads = 0;
+  for (const revision of openRevisions ?? []) {
+    const { data: files, error } = await admin.storage
+      .from("submissions")
+      .list(`revisions/${revision.id}`, { limit: 1000 });
+    if (error) {
+      report.storage.revisions = { error: error.message };
+      failed = true;
+      break;
+    }
+    const expectedPrefix = `v${revision.current_version + 1}-`;
+    if (
+      (files ?? []).some(
+        (file) =>
+          file.id && file.name.startsWith(expectedPrefix) && Number(file.metadata?.size) > 0,
+      )
+    ) {
+      strandedUploads += 1;
+    }
+  }
+  if (!report.storage.revisions) {
+    report.storage.revisions = {
+      openWindows: openRevisions?.length ?? 0,
+      strandedUploads,
+    };
+    if (strandedUploads > 0) failed = true;
   }
 }
 

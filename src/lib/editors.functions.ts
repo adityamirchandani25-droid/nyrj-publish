@@ -704,7 +704,15 @@ export const finalizeRevision = createServerFn({ method: "POST" })
         } as never,
         { onConflict: "submission_id,version", ignoreDuplicates: true },
       );
-      if (snapshotError) throw new Error(snapshotError.message);
+      if (snapshotError) {
+        console.error("[server] revision snapshot failed:", snapshotError);
+        if (snapshotError.code === "42P10") {
+          throw new Error(
+            "Your file uploaded successfully, but the revision service could not attach it. Please do not upload it again; reply to our email so the editorial team can recover it.",
+          );
+        }
+        throw new Error(snapshotError.message);
+      }
     }
 
     const { error } = await supabaseAdmin.from("manuscript_versions").insert({
@@ -716,6 +724,7 @@ export const finalizeRevision = createServerFn({ method: "POST" })
       note: data.note,
     } as never);
     if (error) {
+      console.error("[server] revision version insert failed:", error);
       if (error.code === "23505") {
         throw new Error("This revision was already received. Please refresh the page.");
       }
