@@ -126,36 +126,8 @@ export const listTrashedManuscriptSubmissions = createServerFn({ method: "POST" 
     verifyStaffToken(data.staffToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Auto-purge anything trashed more than 30 days ago.
-    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: expired } = await supabaseAdmin
-      .from("manuscript_submissions")
-      .select("id, manuscript_path, supplementary_paths")
-      .not("deleted_at", "is", null)
-      .lt("deleted_at", cutoff);
-    if (expired && expired.length > 0) {
-      const paths: string[] = [];
-      for (const r of expired as Array<{
-        manuscript_path: string | null;
-        supplementary_paths: Json;
-      }>) {
-        if (r.manuscript_path) paths.push(r.manuscript_path);
-        if (Array.isArray(r.supplementary_paths)) {
-          for (const s of r.supplementary_paths as Array<{ path?: string }>) {
-            if (s?.path) paths.push(s.path);
-          }
-        }
-      }
-      if (paths.length > 0) await supabaseAdmin.storage.from("submissions").remove(paths);
-      await supabaseAdmin
-        .from("manuscript_submissions")
-        .delete()
-        .in(
-          "id",
-          (expired as Array<{ id: string }>).map((r) => r.id),
-        );
-    }
-
+    // Reading historical records must not destroy papers, review versions, or
+    // reminder logs. Permanent removal remains an explicit staff action.
     const { data: rows, error } = await supabaseAdmin
       .from("manuscript_submissions")
       .select(SELECT_COLS)

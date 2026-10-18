@@ -13,10 +13,13 @@ export async function runEditorialFollowups(): Promise<{
     await import("./email-templates/send-email");
   const { audit } = await import("./peer-review.server");
   const now = Date.now();
-  const tenDaysAgo = new Date(now - 10 * DAY_MS).toISOString();
+
   const monthAgo = new Date(now - 30 * DAY_MS).toISOString();
   const today = new Date(now).toISOString().slice(0, 10);
-  let authorReminders = 0;
+  const { sendRevisionReminders, dispatchReviewNotifications } =
+    await import("./review-workflow.server");
+  const authorReminders = await sendRevisionReminders();
+  await dispatchReviewNotifications();
   let staffAlerts = 0;
   let initialReviewerReminders = 0;
 
@@ -29,37 +32,13 @@ export async function runEditorialFollowups(): Promise<{
     .neq("decision", "declined")
     .eq("status", "waiting for edits")
     .not("revision_requested_at", "is", null)
-    .lte("revision_requested_at", tenDaysAgo)
+    .lte("revision_requested_at", monthAgo)
     .order("revision_requested_at", { ascending: true })
     .limit(1000);
   if (revisionsError) throw new Error(revisionsError.message);
   for (const row of revisions ?? []) {
     const requestedAt = row.revision_requested_at as string;
     const key = `${row.id}-${requestedAt}`;
-    if (!row.revision_reminder_sent_at && row.resubmit_token) {
-      try {
-        await sendTemplateEmail("author-revision-reminder", row.submitter_email, {
-          idempotencyKey: `author-revision-followup-${key}`,
-          replyTo: "NYRJINFO@gmail.com",
-          templateData: {
-            title: row.title,
-            resubmitUrl: `https://nyrj.org/resubmit?token=${row.resubmit_token}`,
-          },
-        });
-        const { error } = await supabaseAdmin
-          .from("manuscript_submissions")
-          .update({ revision_reminder_sent_at: new Date().toISOString() } as never)
-          .eq("id", row.id)
-          .eq("status", "waiting for edits")
-          .eq("revision_requested_at", requestedAt)
-          .is("revision_reminder_sent_at", null);
-        if (error) throw new Error(error.message);
-        authorReminders++;
-        await audit(row.id, "system", "Author revision follow-up sent", row.submitter_email);
-      } catch (error) {
-        console.error("[followups] author reminder failed:", row.id, error);
-      }
-    }
     if (requestedAt > monthAgo || row.revision_staff_alert_sent_at) continue;
     try {
       await sendTemplateEmailToMany("author-revision-overdue", MASTER_STAFF_EMAILS, (to) => ({

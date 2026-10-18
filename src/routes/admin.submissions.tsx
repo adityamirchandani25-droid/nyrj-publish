@@ -1,3 +1,4 @@
+import { PeerReviewOverview } from "@/components/PeerReviewOverview";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
@@ -159,8 +160,7 @@ function AdminSubmissions() {
   }
 
   async function moveToTrash(id: string) {
-    if (!window.confirm("Move this submission to Trash? Editors can restore it within 30 days."))
-      return;
+    if (!window.confirm("Move this submission to Trash? Editors can restore it later.")) return;
     try {
       await trashManuscriptSubmission({ data: { staffToken: staffToken(), id } });
       await refresh();
@@ -200,6 +200,8 @@ function AdminSubmissions() {
           Every submission from the on-site form. Change status or decision — updates appear on the
           author's Track Submissions page immediately.
         </p>
+
+        <PeerReviewOverview refreshKey={dataRefreshKey} />
 
         <div className="mt-6 flex flex-wrap gap-2">
           <button
@@ -263,7 +265,8 @@ function AdminSubmissions() {
 
         {tab === "trash" && (
           <p className="mt-4 text-xs text-muted-foreground italic">
-            Items in Trash are visible only to editors and are permanently removed after 30 days.
+            Items in Trash are visible only to editors. They remain in historical review records
+            until staff explicitly delete them permanently.
           </p>
         )}
 

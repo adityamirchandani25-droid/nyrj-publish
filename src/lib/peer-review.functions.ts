@@ -1,3 +1,4 @@
+import { reviewFeedbackSchema } from "./review-feedback";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { MASTER_STAFF_EMAILS } from "./staff-recipients";
@@ -274,7 +275,7 @@ export const resendReviewerInvitation = createServerFn({ method: "POST" })
   });
 
 export const listAssignments = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => StaffSchema.parse(d))
+  .inputValidator((d: unknown) => StaffSchema.extend({ submissionId: z.string().uuid() }).parse(d))
   .handler(async ({ data }): Promise<AssignmentRow[]> => {
     const { verifyStaffToken } = await import("./staff-auth.server");
     verifyStaffToken(data.staffToken);
@@ -282,8 +283,8 @@ export const listAssignments = createServerFn({ method: "POST" })
     const { data: rows, error } = await supabaseAdmin
       .from("review_assignments")
       .select(ASSIGNMENT_COLS)
-      .order("assigned_at", { ascending: false })
-      .limit(500);
+      .eq("submission_id", data.submissionId)
+      .order("assigned_at", { ascending: false });
     if (error) throw new Error(error.message);
     return (rows ?? []) as AssignmentRow[];
   });
@@ -399,9 +400,10 @@ export const markEmailReplyAsReview = createServerFn({ method: "POST" })
       .from("review_assignments")
       .update({
         status: "review_received",
-        review_comments: reply.body_text.trim() || "Reviewer feedback attached by email.",
+        review_comments: reply.body_text.trim(),
         review_submitted_at: reply.received_at,
-        ...(selected ? { review_file_path: selected.path, review_file_name: selected.name } : {}),
+        review_file_path: selected?.path ?? null,
+        review_file_name: selected?.name ?? null,
       } as never)
       .eq("id", reply.assignment_id)
       .in("status", ["invited", "accepted", "no_response", "review_received"])
@@ -409,6 +411,8 @@ export const markEmailReplyAsReview = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error || !updated)
       throw new Error("This assignment can no longer receive reviewer feedback.");
+    const { dispatchReviewNotifications } = await import("./review-workflow.server");
+    await dispatchReviewNotifications(assignment.submission_id).catch(console.error);
     await audit(
       assignment.submission_id,
       "staff",
@@ -929,13 +933,7 @@ export const createReviewUpload = createServerFn({ method: "POST" })
   });
 
 export const submitReview = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) =>
-    ReviewerInviteSchema.extend({
-      comments: z.string().trim().min(1, "Please enter your review.").max(20000),
-      filePath: z.string().max(500).optional(),
-      fileName: z.string().trim().max(255).optional(),
-    }).parse(d),
-  )
+  .inputValidator((d: unknown) => ReviewerInviteSchema.and(reviewFeedbackSchema).parse(d))
   .handler(async ({ data }) => {
     const reviewer = await requireApprovedReviewer(data.reviewerToken);
     const { audit } = await import("./peer-review.server");
@@ -959,6 +957,20 @@ export const submitReview = createServerFn({ method: "POST" })
       throw new Error("Accept this review invitation before submitting your review.");
     }
 
+    const { data: paperState, error: paperStateError } = await supabaseAdmin
+      .from("manuscript_submissions")
+      .select("status,decision,deleted_at")
+      .eq("id", row.submission_id)
+      .single();
+    if (
+      paperStateError ||
+      !paperState ||
+      paperState.deleted_at ||
+      paperState.decision === "declined" ||
+      ["published", "waiting for edits"].includes(paperState.status)
+    ) {
+      throw new Error("This paper is not currently open for reviewer feedback.");
+    }
     let reviewFile: { review_file_path: string; review_file_name: string } | null = null;
     if (data.filePath || data.fileName) {
       const extension = data.fileName?.split(".").pop()?.toLowerCase() ?? "";
@@ -988,7 +1000,8 @@ export const submitReview = createServerFn({ method: "POST" })
         status: "review_received",
         review_comments: data.comments,
         review_submitted_at: new Date().toISOString(),
-        ...(reviewFile ?? {}),
+        review_file_path: reviewFile?.review_file_path ?? null,
+        review_file_name: reviewFile?.review_file_name ?? null,
       } as never)
       .eq("id", row.id)
       .in("status", ["accepted", "review_received"])
@@ -1004,23 +1017,22 @@ export const submitReview = createServerFn({ method: "POST" })
 
     const stamp = Date.now();
     try {
-      const { sendTemplateEmailToMany } = await import("./email-templates/send-email");
-      await sendTemplateEmailToMany("review-received", EDITOR_RECIPIENTS, (to) => ({
-        idempotencyKey: `review-received-${row.id}-${stamp}-${to}`,
-        replyTo: row.reviewer_email,
-        templateData: {
-          reviewerName: row.reviewer_name || row.reviewer_email,
-          reviewerEmail: row.reviewer_email,
-          title: (sub as { title?: string } | null)?.title ?? "",
-          submissionId: row.submission_id,
-          comments: data.comments,
-          attachmentName: reviewFile?.review_file_name ?? row.review_file_name ?? "",
-        },
-      }));
-      await audit(row.submission_id, row.reviewer_email, "Review submitted", "Emailed to editors");
+      const { dispatchReviewNotifications } = await import("./review-workflow.server");
+      await dispatchReviewNotifications(row.submission_id);
+      await audit(
+        row.submission_id,
+        row.reviewer_email,
+        "Review submitted",
+        "Staff notifications queued",
+      );
     } catch (e) {
-      console.error("[server] review-received email failed:", e);
-      await audit(row.submission_id, row.reviewer_email, "Review submitted", "Editor email failed");
+      console.error("[server] review notification failed:", e);
+      await audit(
+        row.submission_id,
+        row.reviewer_email,
+        "Review submitted",
+        "Staff notification pending retry",
+      );
     }
 
     try {
@@ -1206,4 +1218,47 @@ export const resetReviewerPassword = createServerFn({ method: "POST" })
     }
     await audit(null, r.email, "Password reset completed", "");
     return { ok: true };
+  });
+
+export const getReviewerFeedbackHistory = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => ReviewerInviteSchema.parse(d))
+  .handler(async ({ data }) => {
+    const reviewer = await requireApprovedReviewer(data.reviewerToken);
+    const { supabaseAdmin: db } = await import("@/integrations/supabase/client.server");
+    const { data: assignment, error } = await db
+      .from("review_assignments")
+      .select("id,reviewer_email")
+      .eq("invite_token", data.token)
+      .single();
+    if (error || !assignment) throw new Error("Review assignment not found.");
+    requireAssignmentOwner(reviewer.email, assignment.reviewer_email);
+    const { allRows } = await import("./review-workflow.server");
+    const versions = await allRows((a, b) =>
+      db
+        .from("review_feedback_versions")
+        .select("id,comments,file_name,file_path,submitted_at")
+        .eq("assignment_id", assignment.id)
+        .order("recorded_at", { ascending: false })
+        .order("id")
+        .range(a, b),
+    );
+    return Promise.all(
+      versions.map(async (v) => {
+        let fileUrl: string | null = null;
+        if (v.file_path) {
+          const { data: signed, error: signError } = await db.storage
+            .from("submissions")
+            .createSignedUrl(v.file_path, 600, { download: v.file_name || "annotated-paper" });
+          if (signError) throw new Error("Could not open feedback history attachment.");
+          fileUrl = signed?.signedUrl ?? null;
+        }
+        return {
+          id: v.id,
+          comments: v.comments,
+          fileName: v.file_name,
+          submittedAt: v.submitted_at,
+          fileUrl,
+        };
+      }),
+    );
   });

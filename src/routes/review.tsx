@@ -1,3 +1,4 @@
+import { ReviewerFeedbackHistory } from "@/components/ReviewerFeedbackHistory";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
@@ -260,8 +261,8 @@ function InvitePanel({ token, session }: { token: string; session: ReviewerSessi
         <form onSubmit={send} className="border border-border bg-card p-6">
           <p className={label}>Your review</p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Please share your edits, comments, and recommendation below. Your review is due by{" "}
-            <strong>{due}</strong>.
+            Upload an annotated paper, write comments, or do both. Provide at least one. Your review
+            is due by <strong>{due}</strong>.
           </p>
           <textarea
             className={`${input} min-h-[240px]`}
@@ -271,10 +272,10 @@ function InvitePanel({ token, session }: { token: string; session: ReviewerSessi
               setComments(e.target.value);
             }}
             maxLength={20000}
-            placeholder="Summary, strengths, specific edits, and your recommendation…"
+            placeholder="Direct comments (optional if you upload an annotated paper)…"
           />
           <label className="mt-4 block text-sm text-primary" htmlFor="invite-review-file">
-            Optional annotated file for the author
+            Annotated paper (optional if you write comments)
           </label>
           <input
             id="invite-review-file"
@@ -287,15 +288,19 @@ function InvitePanel({ token, session }: { token: string; session: ReviewerSessi
             PDF or Word, up to 8 MB. Editors review the file and comments before sharing them.
           </p>
           {invite.reviewFileName && !file && (
-            <p className="mt-1 text-xs text-muted-foreground">Attached: {invite.reviewFileName}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Previous round file: {invite.reviewFileName} (upload again to include in this round)
+            </p>
           )}
           {done && <p className="mt-3 text-sm text-accent">{done}</p>}
           {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
-          <button className={`${btn} mt-4`} disabled={busy || !comments.trim()}>
+          <button className={`${btn} mt-4`} disabled={busy || (!comments.trim() && !file)}>
             {invite.status === "review_received" ? "Resend review" : "Send review to editors"}
           </button>
         </form>
       )}
+
+      <ReviewerFeedbackHistory token={token} reviewerToken={session.token} />
 
       {invite.status === "sent_to_author" && (
         <p className="text-sm text-muted-foreground">
@@ -803,6 +808,7 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
               </div>
             )}
 
+            <ReviewerFeedbackHistory token={r.token} reviewerToken={session.token} />
             {(r.status === "accepted" || r.status === "review_received") && (
               <div className="mt-4">
                 {openId === r.assignmentId ? (
@@ -817,7 +823,7 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
                       className="mt-3 block text-sm text-primary"
                       htmlFor={`review-file-${r.assignmentId}`}
                     >
-                      Optional annotated file for the author
+                      Annotated paper (optional if you write comments)
                     </label>
                     <input
                       id={`review-file-${r.assignmentId}`}
@@ -832,13 +838,14 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
                     </p>
                     {r.reviewFileName && !file && (
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Attached: {r.reviewFileName}
+                        Previous round file: {r.reviewFileName} (upload again to include in this
+                        round)
                       </p>
                     )}
                     <div className="mt-3 flex gap-3">
                       <button
                         className={btn}
-                        disabled={busy || !draft.trim()}
+                        disabled={busy || (!draft.trim() && !file)}
                         onClick={() => send(r)}
                       >
                         Send review

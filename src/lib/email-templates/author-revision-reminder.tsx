@@ -26,7 +26,7 @@ export function AuthorRevisionReminderEmail({
         <Container style={{ backgroundColor: "#fff", padding: "32px", maxWidth: "600px" }}>
           <Heading style={{ fontSize: "22px" }}>Checking in about your edits</Heading>
           <Text>
-            We sent requested edits for <strong>“{title}”</strong> about ten days ago and wanted to
+            We are waiting for a revised version of <strong>“{title}”</strong> and wanted to
             check how they are going.
           </Text>
           <Text>

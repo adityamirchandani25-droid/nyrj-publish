@@ -12,6 +12,7 @@ const MessageSchema = z.object({
 const ChatSchema = z
   .object({
     messages: z.array(MessageSchema).min(1).max(16),
+    staffToken: z.string().min(1).max(300).optional(),
     tools: z
       .object({
         token: z.string().min(1).max(300),
@@ -213,6 +214,14 @@ function formatDirectory(
 export const chatAssistant = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ChatSchema.parse(d))
   .handler(async ({ data }) => {
+    if (data.staffToken) {
+      const { verifyStaffToken } = await import("./staff-auth.server");
+      verifyStaffToken(data.staffToken);
+      const { enforceRateLimit } = await import("./rate-limit.server");
+      await enforceRateLimit({ scope: "sage-staff", limit: 60, windowSeconds: 600 });
+      const { answerStaffQuestion } = await import("./sage-staff.server");
+      return answerStaffQuestion(data.messages.at(-1)!.content);
+    }
     if (data.tools) {
       const { verifyDeveloperToken } = await import("./developer-auth.server");
       verifyDeveloperToken(data.tools.token, "tools");

@@ -57,7 +57,7 @@ for (const file of files) {
   const relative = path.relative(staticRoot, file);
   for (const name of secretNames) {
     const value = env[name];
-    if (value && value.length >= 8 && contents.includes(value)) {
+    if (value && value.length >= 6 && contents.includes(value)) {
       violations.push(`${relative}: contains ${name}`);
     }
   }

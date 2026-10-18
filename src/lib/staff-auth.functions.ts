@@ -19,3 +19,14 @@ export const staffLogin = createServerFn({ method: "POST" })
     }
     return issueStaffToken();
   });
+
+/** Allow a staff code typed into Sage without ever forwarding it to the AI. */
+export const verifySageStaffCode = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => z.object({ text: z.string().min(1).max(100) }).parse(d))
+  .handler(async ({ data }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({ scope: "sage-staff-code", limit: 20, windowSeconds: 600 });
+    const { checkStaffPassword, issueStaffToken } = await import("./staff-auth.server");
+    if (!checkStaffPassword(data.text)) return { matched: false as const };
+    return { matched: true as const, ...issueStaffToken() };
+  });

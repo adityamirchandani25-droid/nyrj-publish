@@ -1,3 +1,4 @@
+import { ReviewFeedbackHistory } from "./ReviewFeedbackHistory";
 import { useEffect, useState, type FormEvent } from "react";
 import { getSession, staffToken } from "@/lib/auth";
 import { VersionHistory } from "@/components/VersionHistory";
@@ -61,9 +62,10 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
     setError(null);
     try {
       const [all, log] = await Promise.all([
-        listAssignments({ data: { staffToken: staffToken() } }),
+        listAssignments({ data: { staffToken: staffToken(), submissionId } }),
         listAuditLog({ data: { staffToken: staffToken(), submissionId } }),
       ]);
+      setVersionsRefreshKey((v) => v + 1);
       setRows(all.filter((a) => a.submission_id === submissionId));
       setAudit(log);
       try {
@@ -235,7 +237,7 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
                 </button>
               )}
 
-              {a.review_comments && (
+              {(a.review_comments || a.review_file_name) && (
                 <div className="mt-3">
                   <p className={heading}>Edits received</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
@@ -298,8 +300,21 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
                     <button
                       className={`${btn} mt-3`}
                       onClick={() => {
-                        setDraft(a.edits_sent_body || a.review_comments);
-                        setIncludeFile(Boolean(a.edits_sent_file_path));
+                        const feedback =
+                          a.status === "review_received"
+                            ? a.review_comments
+                            : a.edits_sent_body || a.review_comments;
+                        setDraft(
+                          feedback ||
+                            "Please see the attached annotated paper for the requested edits.",
+                        );
+                        setIncludeFile(
+                          Boolean(
+                            a.status === "review_received"
+                              ? a.review_file_path
+                              : a.edits_sent_file_path,
+                          ),
+                        );
                         setEditFor(a.id);
                       }}
                     >
@@ -468,6 +483,7 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
 
       <div>
         <p className={heading}>Author revisions</p>
+        <ReviewFeedbackHistory submissionId={submissionId} refreshKey={versionsRefreshKey} />
         <VersionHistory key={versionsRefreshKey} submissionId={submissionId} />
       </div>
 

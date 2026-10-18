@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { Sparkles, X, Send } from "lucide-react";
+import { staffLogin, verifySageStaffCode } from "@/lib/staff-auth.functions";
 import { chatAssistant } from "@/lib/chat.functions";
 import { verifyDeveloperCode } from "@/lib/developer-auth.functions";
 import { getSession, isDeveloper } from "@/lib/auth";
@@ -13,6 +14,13 @@ const INTRO: Msg = {
   content:
     "Hi, welcome to NYRJ! I'm Sage, your guide here. 👋 Ask me anything — submitting a manuscript, peer review, DOIs, chapters, events, or our team. No question is too small, and if you'd rather talk to a real person I can point you there too. What are you working on?",
 };
+
+const STAFF_SUGGESTIONS = [
+  "Are there any requests to accept?",
+  "Which papers are waiting on resubmission?",
+  "Which reviewers haven’t sent comments yet?",
+  "Are our emails up to date?",
+];
 
 const SUGGESTIONS = [
   "How do I submit my paper?",
@@ -38,6 +46,12 @@ function recentConversation(messages: Msg[]): Msg[] {
 export function ChatbotPopup() {
   const navigate = useNavigate();
   const pathname = useLocation({ select: (location) => location.pathname });
+  const [staffSession, setStaffSession] = useState<{ token: string; expiresAt: number } | null>(
+    null,
+  );
+  const [unlocking, setUnlocking] = useState(false);
+  const [accessCode, setAccessCode] = useState("");
+  const requestGeneration = useRef(0);
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([INTRO]);
   const [conversation, setConversation] = useState<Msg[]>([]);
@@ -51,8 +65,65 @@ export function ChatbotPopup() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, open, busy]);
 
+  function resetStaffMode() {
+    requestGeneration.current++;
+    setStaffSession(null);
+    setAccessCode("");
+    setUnlocking(false);
+    setMessages([INTRO]);
+    setConversation([]);
+    setError(null);
+  }
+  useEffect(() => {
+    if (!staffSession) return;
+    const timer = window.setTimeout(
+      resetStaffMode,
+      Math.max(0, staffSession.expiresAt - Date.now()),
+    );
+    return () => window.clearTimeout(timer);
+  }, [staffSession]);
+  async function unlockStaff(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    const password = accessCode;
+    setAccessCode("");
+    try {
+      const verified = await staffLogin({ data: { password } });
+      requestGeneration.current++;
+      setStaffSession(verified);
+      setUnlocking(false);
+      setConversation([]);
+      setMessages([
+        {
+          role: "assistant",
+          content:
+            "Staff mode unlocked. I can check live submissions, approval requests, missing feedback and email logs. Ask a question or put a paper title in quotation marks.",
+        },
+      ]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not unlock staff mode.");
+    } finally {
+      setBusy(false);
+    }
+  }
   async function ask(text: string) {
     if (!text || busy) return;
+    if (text === "/staff") {
+      setUnlocking(true);
+      setInput("");
+      return;
+    }
+    if (text === "/public") {
+      resetStaffMode();
+      setInput("");
+      return;
+    }
+    if (staffSession && Date.now() >= staffSession.expiresAt) {
+      resetStaffMode();
+      return;
+    }
+    const generation = requestGeneration.current;
     setInput("");
     setError(null);
     if (text.toLowerCase() === "/tools") {
@@ -66,8 +137,24 @@ export function ChatbotPopup() {
     }
     setBusy(true);
     try {
+      if (!staffSession && /^(?=.*[a-zA-Z])(?=.*[0-9])\S{1,100}$/.test(text)) {
+        const verified = await verifySageStaffCode({ data: { text } });
+        if (verified.matched) {
+          requestGeneration.current++;
+          setStaffSession({ token: verified.token, expiresAt: verified.expiresAt });
+          setConversation([]);
+          setMessages([
+            {
+              role: "assistant",
+              content:
+                "Staff mode unlocked. Ask about live submissions, approvals, reviewer feedback, resubmissions or emails.",
+            },
+          ]);
+          return;
+        }
+      }
       // The code is checked on the server and never included in the client bundle.
-      if (/^[A-Z]{12}$/.test(text)) {
+      if (!staffSession && /^[A-Z]{12}$/.test(text)) {
         const result = await verifyDeveloperCode({ data: { text } });
         if (result.matched) {
           setOpen(false);
@@ -82,7 +169,10 @@ export function ChatbotPopup() {
         role: m.role,
         content: m.content,
       }));
-      const { reply } = await chatAssistant({ data: { messages: payload } });
+      const { reply } = await chatAssistant({
+        data: { messages: payload, ...(staffSession ? { staffToken: staffSession.token } : {}) },
+      });
+      if (generation !== requestGeneration.current) return;
       setConversation(
         recentConversation([...nextConversation, { role: "assistant", content: reply }]),
       );
@@ -134,12 +224,37 @@ export function ChatbotPopup() {
               <div>
                 <p className="font-serif text-lg leading-tight">Ask Sage</p>
                 <p className="text-[10px] uppercase tracking-[0.25em] opacity-80">
-                  NYRJ AI guide · always on
+                  {staffSession ? "Staff mode · live system data" : "NYRJ AI guide · always on"}
                 </p>
               </div>
             </div>
           </div>
 
+          <div className="flex gap-3 border-b border-border px-4 py-2 text-xs">
+            {staffSession ? (
+              <button onClick={resetStaffMode}>Exit staff mode & clear chat</button>
+            ) : (
+              <button onClick={() => setUnlocking((v) => !v)}>Unlock staff mode</button>
+            )}
+          </div>
+          {unlocking && !staffSession && (
+            <form onSubmit={unlockStaff} className="flex gap-2 border-b border-border p-3">
+              <input
+                autoFocus
+                type="password"
+                autoComplete="off"
+                aria-label="Staff access code"
+                placeholder="Staff access code"
+                value={accessCode}
+                onChange={(e) => setAccessCode(e.target.value)}
+                maxLength={500}
+                className="min-w-0 flex-1 border border-border bg-background p-2 text-sm"
+              />
+              <button disabled={busy || !accessCode} className="text-sm">
+                Unlock
+              </button>
+            </form>
+          )}
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {messages.map((m, i) => (
               <div
@@ -156,7 +271,7 @@ export function ChatbotPopup() {
 
             {messages.length === 1 && !busy && (
               <div className="flex flex-wrap gap-2 pt-1">
-                {SUGGESTIONS.map((s) => (
+                {(staffSession ? STAFF_SUGGESTIONS : SUGGESTIONS).map((s) => (
                   <button
                     key={s}
                     type="button"
