@@ -46,6 +46,7 @@ export type AdminManuscriptRow = {
   research_type_other: string | null;
   status: string;
   decision: string;
+  current_version: number;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -95,7 +96,7 @@ type AdminManuscriptRowSerialized = Omit<
 };
 
 const SELECT_COLS =
-  "id, submitter_email, title, research_type, research_type_other, status, decision, created_at, updated_at, deleted_at, manuscript_filename, manuscript_path, authors, abstract, comments, conflict_of_interest, conflict_explanation, funding, funding_source, used_gen_ai, gen_ai_explanation, is_original, not_under_consideration, has_human_or_vertebrate, consent_form_paths, data_availability, all_authors_consent, supplementary_paths, keywords, research_domain, initial_reviewer_name, initial_reviewer_email, initial_reviewer_assigned_at";
+  "id, submitter_email, title, research_type, research_type_other, status, decision, current_version, created_at, updated_at, deleted_at, manuscript_filename, manuscript_path, authors, abstract, comments, conflict_of_interest, conflict_explanation, funding, funding_source, used_gen_ai, gen_ai_explanation, is_original, not_under_consideration, has_human_or_vertebrate, consent_form_paths, data_availability, all_authors_consent, supplementary_paths, keywords, research_domain, initial_reviewer_name, initial_reviewer_email, initial_reviewer_assigned_at";
 
 export const listManuscriptSubmissions = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => TokenSchema.parse(d))

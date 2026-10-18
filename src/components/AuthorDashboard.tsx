@@ -1,31 +1,70 @@
 import { Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getAuthorDashboard, type AuthorManuscript } from "@/lib/author-dashboard.functions";
 
 export function AuthorDashboard({ email }: { email: string }) {
   const [papers, setPapers] = useState<AuthorManuscript[] | null>(null);
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async (showLoading = false) => {
+    if (showLoading) setPapers(null);
+    setRefreshing(true);
+    setError("");
+    try {
+      const rows = await getAuthorDashboard();
+      setPapers(rows);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not load your edits.");
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
     setPapers(null);
     setError("");
+    setRefreshing(true);
     getAuthorDashboard()
       .then((rows) => {
         if (active) setPapers(rows);
       })
       .catch((cause: unknown) => {
         if (active) setError(cause instanceof Error ? cause.message : "Could not load your edits.");
+      })
+      .finally(() => {
+        if (active) setRefreshing(false);
       });
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       active = false;
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [email]);
+  }, [email, load]);
 
   return (
     <section className="mt-10 border-t-2 border-primary pt-8">
-      <p className="text-[10px] uppercase tracking-[0.35em] text-accent">Your Manuscripts</p>
-      <h2 className="mt-2 font-serif text-3xl text-primary">Recent edits and revisions</h2>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.35em] text-accent">Your Manuscripts</p>
+          <h2 className="mt-2 font-serif text-3xl text-primary">Recent edits and revisions</h2>
+        </div>
+        <button
+          type="button"
+          onClick={() => void load()}
+          disabled={refreshing}
+          className="border border-primary px-4 py-2 text-[11px] uppercase tracking-[0.18em] text-primary hover:bg-primary hover:text-primary-foreground disabled:opacity-50"
+        >
+          {refreshing ? "Refreshing…" : "Refresh papers"}
+        </button>
+      </div>
       {error && (
         <p className="mt-4 text-sm text-destructive" role="alert">
           {error}

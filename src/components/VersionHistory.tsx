@@ -3,19 +3,27 @@ import { staffToken } from "@/lib/auth";
 import { listVersions, type VersionRow } from "@/lib/editors.functions";
 import { signManuscriptDownload } from "@/lib/manuscript-admin.functions";
 
-export function VersionHistory({ submissionId }: { submissionId: string }) {
+export function VersionHistory({
+  submissionId,
+  refreshKey = 0,
+}: {
+  submissionId: string;
+  refreshKey?: number;
+}) {
   const [rows, setRows] = useState<VersionRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
+    setRows(null);
+    setError(null);
     listVersions({ data: { staffToken: staffToken(), submissionId } })
       .then((r) => alive && setRows(r))
       .catch((e) => alive && setError(e instanceof Error ? e.message : "Could not load versions."));
     return () => {
       alive = false;
     };
-  }, [submissionId]);
+  }, [submissionId, refreshKey]);
 
   async function download(path: string, filename: string) {
     try {

@@ -8,8 +8,10 @@ const LoginSchema = z.object({
 export const staffLogin = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => LoginSchema.parse(d))
   .handler(async ({ data }) => {
+    // Editorial staff often share a school or office IP. Keep a bounded
+    // brute-force guard without locking out the whole team after five logins.
     const { enforceRateLimit } = await import("./rate-limit.server");
-    await enforceRateLimit({ scope: "staff-login", limit: 5, windowSeconds: 10 * 60 });
+    await enforceRateLimit({ scope: "staff-login", limit: 20, windowSeconds: 10 * 60 });
 
     const { checkStaffPassword, issueStaffToken } = await import("./staff-auth.server");
     if (!checkStaffPassword(data.password)) {

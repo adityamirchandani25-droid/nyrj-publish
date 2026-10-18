@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
 import { getSession, isStaff, onAuthChange, staffToken, type Session } from "@/lib/auth";
 import { addEntry } from "@/lib/library";
@@ -58,6 +58,9 @@ function AdminSubmissions() {
   const [libraryFor, setLibraryFor] = useState<string | null>(null);
   const [showManual, setShowManual] = useState(false);
   const [reviewerRefreshKey, setReviewerRefreshKey] = useState(0);
+  const [dataRefreshKey, setDataRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
   useEffect(() => {
     setSession(getSession());
@@ -66,7 +69,8 @@ function AdminSubmissions() {
     return onAuthChange(setSession);
   }, []);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
     setError(null);
     try {
       const [active, bin] = await Promise.all([
@@ -75,14 +79,31 @@ function AdminSubmissions() {
       ]);
       setRows(active);
       setTrashed(bin);
+      setDataRefreshKey((value) => value + 1);
+      setLastRefreshedAt(new Date());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load submissions.");
+    } finally {
+      setRefreshing(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    if (isStaff(session)) void refresh();
-  }, [session]);
+    if (!isStaff(session)) return;
+    void refresh();
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    const timer = window.setInterval(() => void refresh(), 60_000);
+    return () => {
+      window.removeEventListener("focus", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.clearInterval(timer);
+    };
+  }, [session, refresh]);
 
   if (!isStaff(session)) {
     return (
@@ -218,12 +239,25 @@ function AdminSubmissions() {
             Audit Log
           </button>
           <button
+            onClick={() => void refresh()}
+            disabled={refreshing}
+            className="ml-auto px-4 py-2 text-[11px] uppercase tracking-[0.2em] border border-primary text-primary hover:bg-primary hover:text-primary-foreground disabled:opacity-50"
+          >
+            {refreshing ? "Refreshing…" : "Refresh papers"}
+          </button>
+          <button
             onClick={() => setShowManual((v) => !v)}
-            className={`ml-auto px-4 py-2 text-[11px] uppercase tracking-[0.2em] border ${showManual ? "bg-accent text-accent-foreground border-accent" : "border-accent text-accent hover:bg-accent hover:text-accent-foreground"}`}
+            className={`px-4 py-2 text-[11px] uppercase tracking-[0.2em] border ${showManual ? "bg-accent text-accent-foreground border-accent" : "border-accent text-accent hover:bg-accent hover:text-accent-foreground"}`}
           >
             {showManual ? "Cancel Manual Add" : "+ Manually Add to Library"}
           </button>
         </div>
+
+        {lastRefreshedAt && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Papers refresh automatically · last checked {lastRefreshedAt.toLocaleTimeString()}
+          </p>
+        )}
 
         {showManual && <ManualLibraryAddForm onDone={() => setShowManual(false)} />}
 
@@ -262,8 +296,8 @@ function AdminSubmissions() {
                   <div className="min-w-0 flex-1">
                     <p className="font-serif text-lg text-primary truncate">{r.title}</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {r.submitter_email} · {r.research_type ?? "—"} ·{" "}
-                      {new Date(r.created_at).toLocaleDateString()}
+                      {r.submitter_email} · {r.research_type ?? "—"} · v{r.current_version} ·
+                      updated {new Date(r.updated_at).toLocaleString()}
                       {tab === "trash" && r.deleted_at && (
                         <> · trashed {new Date(r.deleted_at).toLocaleDateString()}</>
                       )}
@@ -379,7 +413,7 @@ function AdminSubmissions() {
 
                 {tab === "active" && expanded === r.id && (
                   <div className="px-4 pb-4 pt-2 border-t border-border text-sm space-y-4">
-                    <VersionHistory submissionId={r.id} />
+                    <VersionHistory submissionId={r.id} refreshKey={dataRefreshKey} />
                     {r.manuscript_path && (
                       <div>
                         <p className="text-[10px] uppercase tracking-[0.18em] text-accent">
