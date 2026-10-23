@@ -131,7 +131,11 @@ function SubmitApply() {
 
   const canNext = useMemo(() => {
     if (step === 1) {
-      if (!manuscriptFile) return false;
+      if (!manuscriptFile || !altFormatFile) return false;
+      if (!/\.(doc|docx)$/i.test(manuscriptFile.name) || !/\.pdf$/i.test(altFormatFile.name))
+        return false;
+      if ([manuscriptFile, altFormatFile].some((f) => f.size === 0 || f.size > 25 * 1024 * 1024))
+        return false;
       if (supplementaryFiles.some((f) => !f.description.trim())) return false;
       return true;
     }
@@ -175,6 +179,7 @@ function SubmitApply() {
   }, [
     step,
     manuscriptFile,
+    altFormatFile,
     supplementaryFiles,
     conflictOfInterest,
     conflictExplanation,
@@ -216,8 +221,13 @@ function SubmitApply() {
       setError("Please log in first.");
       return;
     }
-    if (!manuscriptFile) {
-      setError("Manuscript file is required.");
+    if (
+      !manuscriptFile ||
+      !altFormatFile ||
+      !/\.(doc|docx)$/i.test(manuscriptFile.name) ||
+      !/\.pdf$/i.test(altFormatFile.name)
+    ) {
+      setError("Both a Word manuscript and a PDF copy are required.");
       return;
     }
     setSubmitting(true);
@@ -360,11 +370,11 @@ function SubmitApply() {
           {step === 1 && (
             <div className="space-y-6">
               <div>
-                <Label>Manuscript file (Word or PDF) *</Label>
+                <Label>Word manuscript (.doc or .docx) *</Label>
                 <Input
                   key={manuscriptKey}
                   type="file"
-                  accept=".doc,.docx,.pdf"
+                  accept=".doc,.docx"
                   onChange={(e) => setManuscriptFile(e.target.files?.[0] ?? null)}
                 />
                 {manuscriptFile && (
@@ -384,15 +394,16 @@ function SubmitApply() {
                 )}
               </div>
               <div>
-                <Label>Second version in the other format (optional)</Label>
+                <Label>PDF copy of the manuscript *</Label>
                 <p className="text-xs text-muted-foreground mt-1">
-                  If you uploaded a Word file above, you can also add a PDF here — or the other way
-                  around. Both versions stay attached to your submission.
+                  Upload the same manuscript as a PDF. Both files must be 25 MB or smaller. Remove
+                  author names and personal details from both copies and any supplementary files for
+                  anonymous review.
                 </p>
                 <Input
                   key={altFormatKey}
                   type="file"
-                  accept=".doc,.docx,.pdf"
+                  accept=".pdf"
                   className="mt-2"
                   onChange={(e) => setAltFormatFile(e.target.files?.[0] ?? null)}
                 />

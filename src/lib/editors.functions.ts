@@ -39,6 +39,9 @@ export type EditorDeskRow = {
 };
 
 export type RecommendationRow = {
+  review_file_url: string | null;
+  review_file_path: string | null;
+  review_file_name: string | null;
   id: string;
   submission_id: string;
   submission_title: string;
@@ -339,7 +342,7 @@ export const listRecommendations = createServerFn({ method: "POST" })
     const { data: rows, error } = await supabaseAdmin
       .from("editor_recommendations")
       .select(
-        "id, submission_id, editor_name, editor_email, action, comments, status, created_at, reviewed_at, reviewed_by, staff_message",
+        "id, submission_id, editor_name, editor_email, action, comments, status, created_at, reviewed_at, reviewed_by, staff_message, review_file_path, review_file_name",
       )
       .order("created_at", { ascending: false })
       .limit(300);
@@ -356,10 +359,14 @@ export const listRecommendations = createServerFn({ method: "POST" })
         titles.set(s.id, s.title);
       }
     }
-    return list.map((r) => ({
-      ...r,
-      submission_title: titles.get(r.submission_id) ?? "Manuscript",
-    }));
+    const { signedReviewerManuscript } = await import("./reviewer-resources.server");
+    return Promise.all(
+      list.map(async (r) => ({
+        ...r,
+        review_file_url: await signedReviewerManuscript(r.review_file_path, r.review_file_name),
+        submission_title: titles.get(r.submission_id) ?? "Manuscript",
+      })),
+    );
   });
 
 /** Staff approve (and optionally edit) a recommendation. Only now does the author hear anything. */
@@ -381,11 +388,13 @@ export const resolveRecommendation = createServerFn({ method: "POST" })
 
     const { data: recRow, error } = await supabaseAdmin
       .from("editor_recommendations")
-      .select("id, submission_id, action, comments, status")
+      .select("id, submission_id, action, comments, status, review_file_path, review_file_name")
       .eq("id", data.id)
       .single();
     if (error || !recRow) throw new Error("Recommendation not found.");
     const rec = recRow as {
+      review_file_path: string | null;
+      review_file_name: string | null;
       submission_id: string;
       action: string;
       comments: string;
@@ -429,6 +438,18 @@ export const resolveRecommendation = createServerFn({ method: "POST" })
     const authorName = Array.isArray(sub.authors) ? (sub.authors[0]?.name ?? "there") : "there";
     const body = data.message.trim() || rec.comments;
 
+    const attachments: { filename: string; content: string }[] = [];
+    if (rec.review_file_path) {
+      const { data: blob, error } = await supabaseAdmin.storage
+        .from("submissions")
+        .download(rec.review_file_path);
+      if (error || !blob)
+        throw new Error("Could not retrieve the annotated copy. Please retry before approving.");
+      attachments.push({
+        filename: rec.review_file_name || "annotated-manuscript.pdf",
+        content: Buffer.from(await blob.arrayBuffer()).toString("base64"),
+      });
+    }
     let emailed = false;
     if (rec.action === "formatting") {
       const token = sub.resubmit_token ?? newResubmitToken();
@@ -450,6 +471,7 @@ export const resolveRecommendation = createServerFn({ method: "POST" })
         const { sendTemplateEmail } = await import("./email-templates/send-email");
         await sendTemplateEmail("author-revision-request", sub.submitter_email, {
           idempotencyKey: `author-revision-${data.id}`,
+          attachments,
           replyTo: "NYRJINFO@gmail.com",
           templateData: { authorName, title: sub.title, body, resubmitUrl },
         });
@@ -489,6 +511,7 @@ export const resolveRecommendation = createServerFn({ method: "POST" })
         const { sendTemplateEmail } = await import("./email-templates/send-email");
         await sendTemplateEmail("submission-status", sub.submitter_email, {
           idempotencyKey: `status-${rec.submission_id}-${rec.action}-${data.id}`,
+          attachments,
           replyTo: "NYRJINFO@gmail.com",
           templateData: {
             authorName,
@@ -552,7 +575,7 @@ async function submissionForToken(token: string) {
   const { data, error } = await supabaseAdmin
     .from("manuscript_submissions")
     .select(
-      "id, title, submitter_email, current_version, status, decision, authors, manuscript_path, manuscript_filename",
+      "id, title, submitter_email, current_version, status, decision, authors, manuscript_path, manuscript_filename, supplementary_paths",
     )
     .eq("resubmit_token", token)
     .is("deleted_at", null)
@@ -567,6 +590,7 @@ async function submissionForToken(token: string) {
     decision: string;
     authors: Array<{ name?: string }> | null;
     manuscript_path: string | null;
+    supplementary_paths: Array<{ path: string; filename: string; description: string }> | null;
     manuscript_filename: string | null;
   } | null;
   if (!row) throw new Error("This upload link is no longer valid. Please reply to our email.");
@@ -654,6 +678,8 @@ export const finalizeRevision = createServerFn({ method: "POST" })
       path: z.string().trim().min(1).max(500),
       filename: z.string().trim().min(1).max(260),
       expectedVersion: z.number().int().min(1),
+      pdfPath: z.string().trim().min(1).max(500),
+      pdfFilename: z.string().trim().min(1).max(260),
       note: z.string().trim().max(5000).optional().default(""),
     }).parse(d),
   )
@@ -661,7 +687,13 @@ export const finalizeRevision = createServerFn({ method: "POST" })
     const { enforceRateLimit } = await import("./rate-limit.server");
     await enforceRateLimit({ scope: "revision-finalize", limit: 10, windowSeconds: 60 * 60 });
     const row = await submissionForToken(data.token);
-    requireManuscriptFilename(data.filename);
+    if (
+      !/\.(doc|docx)$/i.test(data.filename) ||
+      !/\.(doc|docx)$/i.test(data.path) ||
+      !/\.pdf$/i.test(data.pdfFilename) ||
+      !/\.pdf$/i.test(data.pdfPath)
+    )
+      throw new Error("Both a revised Word file and a PDF copy are required.");
     if (row.current_version !== data.expectedVersion) {
       throw new Error("A newer revision was already received. Please refresh before trying again.");
     }
@@ -671,23 +703,18 @@ export const finalizeRevision = createServerFn({ method: "POST" })
     const nextVersion = data.expectedVersion + 1;
     const folder = `revisions/${row.id}`;
     const expectedPrefix = `${folder}/v${nextVersion}-`;
-    if (!data.path.startsWith(expectedPrefix) || data.path.includes("..")) {
-      throw new Error("That upload does not belong to this revision request.");
-    }
-
-    // A caller cannot finalize a guessed or missing storage path. The exact
-    // object must have been uploaded under this paper's revision directory.
-    const objectName = data.path.slice(folder.length + 1);
-    const { data: storedObjects, error: objectError } = await supabaseAdmin.storage
-      .from("submissions")
-      .list(folder, { search: objectName, limit: 10 });
-    const stored = storedObjects?.find((object) => object.name === objectName);
-    if (objectError || !stored)
-      throw new Error("The manuscript upload was not completed. Please try again.");
-    const storedSize = Number((stored.metadata as { size?: number } | null)?.size ?? 0);
-    if (storedSize > MAX_REVISION_BYTES) {
-      await supabaseAdmin.storage.from("submissions").remove([data.path]);
-      throw new Error("The revised manuscript must be 25 MB or smaller.");
+    for (const path of [data.path, data.pdfPath]) {
+      if (!path.startsWith(expectedPrefix) || path.includes("..")) {
+        throw new Error("That upload does not belong to this revision request.");
+      }
+      const objectName = path.slice(folder.length + 1);
+      const { data: storedObjects, error: objectError } = await supabaseAdmin.storage
+        .from("submissions")
+        .list(folder, { search: objectName, limit: 10 });
+      const stored = storedObjects?.find((object) => object.name === objectName);
+      const size = Number((stored?.metadata as { size?: number } | null)?.size ?? 0);
+      if (objectError || !stored || size <= 0 || size > MAX_REVISION_BYTES)
+        throw new Error("Both manuscript files must finish uploading and be 25 MB or smaller.");
     }
 
     // Preserve the file that was current before replacing the pointer. On the
@@ -736,6 +763,16 @@ export const finalizeRevision = createServerFn({ method: "POST" })
       .update({
         manuscript_path: data.path,
         manuscript_filename: data.filename,
+        supplementary_paths: [
+          ...(row.supplementary_paths ?? []).filter(
+            (f) => f.description !== "Alternate format of the manuscript (Word/PDF)",
+          ),
+          {
+            path: data.pdfPath,
+            filename: data.pdfFilename,
+            description: "Alternate format of the manuscript (Word/PDF)",
+          },
+        ],
         current_version: nextVersion,
         status: "secondary review",
         resubmit_token: null,

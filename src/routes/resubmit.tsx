@@ -34,6 +34,7 @@ function ResubmitPage() {
   } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [pdf, setPdf] = useState<File | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,15 +53,15 @@ function ResubmitPage() {
   }, [token]);
 
   async function upload() {
-    if (!file) {
-      setError("Please choose your revised file first.");
+    if (!file || !pdf) {
+      setError("Please choose both your revised Word file and PDF copy.");
       return;
     }
-    if (!/\.(pdf|doc|docx)$/i.test(file.name)) {
-      setError("Please choose a Word or PDF file for the revised manuscript.");
+    if (!/\.(doc|docx)$/i.test(file.name) || !/\.pdf$/i.test(pdf.name)) {
+      setError("Please choose a Word file and a PDF copy of the revised manuscript.");
       return;
     }
-    if (file.size > 25 * 1024 * 1024) {
+    if ([file, pdf].some((f) => f.size <= 0 || f.size > 25 * 1024 * 1024)) {
       setError("Please choose a file that is 25 MB or smaller.");
       return;
     }
@@ -74,9 +75,18 @@ function ResubmitPage() {
         .from("submissions")
         .uploadToSignedUrl(signed.path, signed.token, file);
       if (upErr) throw new Error(upErr.message);
+      const pdfSigned = await createRevisionUpload({
+        data: { token, filename: pdf.name, size: pdf.size },
+      });
+      const { error: pdfError } = await supabase.storage
+        .from("submissions")
+        .uploadToSignedUrl(pdfSigned.path, pdfSigned.token, pdf);
+      if (pdfError) throw new Error(pdfError.message);
       const res = await finalizeRevision({
         data: {
           token,
+          pdfPath: pdfSigned.path,
+          pdfFilename: pdf.name,
           path: signed.path,
           filename: file.name,
           expectedVersion: signed.expectedVersion,
@@ -126,18 +136,34 @@ function ResubmitPage() {
             )}
             <p className="text-sm text-muted-foreground">
               Your title, authors, abstract, declarations, reviewer assignment, and all other
-              submission details are already saved. This replaces only the current manuscript file
+              submission details are already saved. This updates the Word and PDF manuscript files
               on the same paper — it does not create a new submission or assign a new initial
               reviewer.
             </p>
             <div>
-              <p className="text-[10px] uppercase tracking-[0.25em] text-accent">Revised file</p>
+              <p className="text-[10px] uppercase tracking-[0.25em] text-accent">
+                Revised Word file *
+              </p>
               <input
                 type="file"
-                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept=".doc,.docx"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 className="mt-1 w-full border border-border bg-background px-3 py-2 text-sm"
               />
+            </div>
+            <div>
+              <label className="text-sm">
+                Revised PDF copy *
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => setPdf(e.target.files?.[0] ?? null)}
+                  className="mt-1 w-full border border-border bg-background px-3 py-2 text-sm"
+                />
+              </label>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Remove author names and personal details from both files for anonymous review.
+              </p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-[0.25em] text-accent">

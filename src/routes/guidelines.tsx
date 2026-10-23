@@ -158,11 +158,12 @@ function Guidelines() {
           <div className="border-2 border-primary bg-card p-6 sm:p-8">
             <p className="text-[10px] uppercase tracking-[0.3em] text-accent">Submission Format</p>
             <h2 className="mt-2 font-serif text-2xl text-primary sm:text-3xl">
-              Submit a PDF and retain your Word file
+              Submit both PDF and Word files
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-foreground/90">
-              Submit the final manuscript as a <strong>PDF</strong>. Keep the original{" "}
-              <strong>.docx file</strong> available for editing and peer review.
+              Upload a matching <strong>PDF</strong> and editable{" "}
+              <strong>Word (.doc or .docx)</strong> file for your submission and each revision.
+              Remove author names and personal details from review copies.
             </p>
           </div>
         </section>

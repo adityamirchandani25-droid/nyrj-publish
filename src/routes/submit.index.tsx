@@ -51,7 +51,7 @@ function Submit() {
 
         <ul className="mt-6 grid gap-2 sm:grid-cols-2 text-sm">
           {[
-            "Manuscript as a Microsoft Word document (.doc / .docx)",
+            "Manuscript as both a Word document (.doc / .docx) and PDF",
             "Any additional files (data, figures, code) with descriptions",
             "Author details (name, email, institution, ORCID)",
             "Abstract & research type",
@@ -66,11 +66,11 @@ function Submit() {
 
         <div className="mt-8 border border-border bg-card px-4 py-4 text-sm">
           <p>
-            <strong>Submit in Microsoft Word.</strong> All manuscripts must be sent to us as a
-            Microsoft Word document (.doc / .docx) so our reviewers, section editors, and copy
-            editors can leave tracked comments and edits throughout the review process. Please keep
-            working in Word until your paper reaches final submission — at that stage we will notify
-            you and let you know when a PDF version is required.
+            <strong>Submit Word and PDF copies.</strong> All manuscripts must be sent to us as a
+            Microsoft Word document (.doc / .docx) and a matching PDF so our reviewers, section
+            editors, and copy editors can leave tracked comments and edits throughout the review
+            process. Upload both formats for the original submission and each revision. Remove
+            author names and personal information from the files for anonymous review.
           </p>
         </div>
 

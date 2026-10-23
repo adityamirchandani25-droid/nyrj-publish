@@ -236,6 +236,16 @@ function EditorRecommendations() {
                 {openId === r.id ? "Close" : "Review & send"}
               </button>
             </div>
+            {r.review_file_url && (
+              <a
+                className="mt-3 block text-sm text-primary underline"
+                href={r.review_file_url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open annotated copy ({r.review_file_name})
+              </a>
+            )}
             {r.comments && (
               <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{r.comments}</p>
             )}

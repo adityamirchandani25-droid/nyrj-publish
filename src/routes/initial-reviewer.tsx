@@ -1,3 +1,4 @@
+import { ReviewerSubmissionDetails } from "@/components/ReviewerSubmissionDetails";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
@@ -5,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   getInitialReviewerDesk,
   submitInitialReview,
+  createInitialReviewUpload,
   createInitialReviewerAccount,
   type InitialReviewAssignment,
 } from "@/lib/initial-reviewer-portal.functions";
@@ -314,6 +316,7 @@ function AssignmentCard({
 }) {
   const [action, setAction] = useState<"accept" | "formatting" | "decline">("accept");
   const [comments, setComments] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -328,11 +331,23 @@ function AssignmentCard({
     setBusy(true);
     setError(null);
     try {
+      let attachment: { filePath?: string; fileName?: string } = {};
+      if (file) {
+        const signed = await createInitialReviewUpload({
+          data: { submissionId: assignment.id, filename: file.name, size: file.size },
+        });
+        const { error } = await supabase.storage
+          .from("submissions")
+          .uploadToSignedUrl(signed.path, signed.token, file);
+        if (error) throw new Error("Could not upload the annotated copy.");
+        attachment = { filePath: signed.path, fileName: file.name };
+      }
       await submitInitialReview({
-        data: { submissionId: assignment.id, action, comments },
+        data: { submissionId: assignment.id, action, comments, ...attachment },
       });
       setOpen(false);
       setComments("");
+      setFile(null);
       await onSubmitted();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not submit your review.");
@@ -372,6 +387,7 @@ function AssignmentCard({
         </p>
       )}
 
+      <ReviewerSubmissionDetails submission={assignment.submission} />
       {assignment.recommendation && (
         <div className="mt-4 border-l-2 border-accent pl-4 text-sm text-muted-foreground">
           Latest recommendation:{" "}
@@ -436,10 +452,22 @@ function AssignmentCard({
               className={`${input} mt-2`}
             />
           </label>
+          <label className="block text-sm">
+            Return an annotated copy if you like (Word or PDF)
+            <input
+              type="file"
+              accept=".doc,.docx,.pdf"
+              className={`${input} mt-2`}
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+            <span className="text-xs text-muted-foreground">
+              Up to 8 MB. Staff approve the file before sending it to the author.
+            </span>
+          </label>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <button
             className={primaryButton}
-            disabled={busy || !comments.trim()}
+            disabled={busy || (!comments.trim() && !file)}
             onClick={() => void submit()}
           >
             {busy ? "Submitting…" : "Send to Staff for Approval"}

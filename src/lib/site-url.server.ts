@@ -10,9 +10,14 @@ export function publicSiteUrl(): string {
 
   try {
     const url = new URL(configured);
-    const localHost = ["localhost", "127.0.0.1", "0.0.0.0"].includes(url.hostname);
-    const production = process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL);
-    if (production && localHost) return PRODUCTION_SITE_URL;
+    const host = url.hostname.toLowerCase();
+    const localHost =
+      ["localhost", "0.0.0.0", "[::1]"].includes(host) ||
+      host.startsWith("127.") ||
+      host.endsWith(".localhost") ||
+      host.endsWith(".local");
+    if (url.protocol !== "https:" || localHost || url.username || url.password)
+      return PRODUCTION_SITE_URL;
     return url.origin;
   } catch {
     return PRODUCTION_SITE_URL;

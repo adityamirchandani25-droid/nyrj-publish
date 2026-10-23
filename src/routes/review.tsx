@@ -1,3 +1,4 @@
+import { ReviewerSubmissionDetails } from "@/components/ReviewerSubmissionDetails";
 import { ReviewerFeedbackHistory } from "@/components/ReviewerFeedbackHistory";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
@@ -215,6 +216,7 @@ function InvitePanel({ token, session }: { token: string; session: ReviewerSessi
             {invite.abstract}
           </p>
         )}
+        <ReviewerSubmissionDetails submission={invite.submission} />
         {invite.manuscriptUrl && (
           <a
             href={invite.manuscriptUrl}
@@ -222,7 +224,7 @@ function InvitePanel({ token, session }: { token: string; session: ReviewerSessi
             rel="noreferrer"
             className={`${btnGhost} mt-4 inline-block`}
           >
-            Open manuscript PDF
+            Open manuscript
           </a>
         )}
         <p className="mt-4 text-xs uppercase tracking-[0.2em] text-accent">
@@ -275,7 +277,7 @@ function InvitePanel({ token, session }: { token: string; session: ReviewerSessi
             placeholder="Direct comments (optional if you upload an annotated paper)…"
           />
           <label className="mt-4 block text-sm text-primary" htmlFor="invite-review-file">
-            Annotated paper (optional if you write comments)
+            Return an annotated copy if you like (Word or PDF)
           </label>
           <input
             id="invite-review-file"
@@ -786,6 +788,7 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
             {r.abstract && (
               <p className="mt-3 text-sm text-muted-foreground whitespace-pre-wrap">{r.abstract}</p>
             )}
+            <ReviewerSubmissionDetails submission={r.submission} />
             {r.manuscriptUrl && (
               <a
                 href={r.manuscriptUrl}
@@ -793,7 +796,7 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
                 rel="noreferrer"
                 className={`${btnGhost} mt-4 inline-block`}
               >
-                Open manuscript PDF
+                Open manuscript
               </a>
             )}
 
@@ -823,7 +826,7 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
                       className="mt-3 block text-sm text-primary"
                       htmlFor={`review-file-${r.assignmentId}`}
                     >
-                      Annotated paper (optional if you write comments)
+                      Return an annotated copy if you like (Word or PDF)
                     </label>
                     <input
                       id={`review-file-${r.assignmentId}`}

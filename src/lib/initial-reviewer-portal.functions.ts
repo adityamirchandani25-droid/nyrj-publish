@@ -1,3 +1,4 @@
+import type { ReviewerSubmission } from "./reviewer-submission";
 import { createServerFn } from "@tanstack/react-start";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
@@ -8,6 +9,7 @@ import { escapeLikePattern, sameEmail } from "./like-pattern";
 const STAFF_RECIPIENTS = MASTER_STAFF_EMAILS;
 
 export type InitialReviewAssignment = {
+  submission: ReviewerSubmission;
   id: string;
   title: string;
   status: string;
@@ -402,9 +404,11 @@ export const getInitialReviewerDesk = createServerFn({ method: "GET" })
             });
           downloadUrl = signed?.signedUrl ?? null;
         }
-        const { initial_reviewer_email: _assignedTo, ...assignment } = row;
+        const { reviewerSubmission } = await import("./reviewer-submission.server");
+        const { initial_reviewer_email: _assignedTo, manuscript_path: _path, ...assignment } = row;
         assignments.push({
           ...assignment,
+          submission: await reviewerSubmission(row.id),
           download_url: downloadUrl,
           recommendation: latest.get(row.id) ?? null,
         });
@@ -419,6 +423,55 @@ export const getInitialReviewerDesk = createServerFn({ method: "GET" })
     },
   );
 
+export const createInitialReviewUpload = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        submissionId: z.string().uuid(),
+        filename: z.string().min(1).max(255),
+        size: z
+          .number()
+          .int()
+          .min(1)
+          .max(8 * 1024 * 1024),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const reviewer = await requireInitialReviewer(context as AuthContext);
+    const extension = data.filename.split(".").pop()?.toLowerCase();
+    if (!["pdf", "doc", "docx"].includes(extension || ""))
+      throw new Error("Choose a Word or PDF file.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: row } = await supabaseAdmin
+      .from("manuscript_submissions")
+      .select("initial_reviewer_email, status, decision")
+      .eq("id", data.submissionId)
+      .is("deleted_at", null)
+      .single();
+    if (
+      !row ||
+      !sameEmail(row.initial_reviewer_email, reviewer.email) ||
+      row.decision !== "pending" ||
+      row.status === "waiting for edits"
+    )
+      throw new Error("This manuscript is not open for your review.");
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({
+      scope: "initial-review-upload",
+      limit: 30,
+      windowSeconds: 3600,
+      identity: context.userId,
+    });
+    const path = `initial-review-feedback/${data.submissionId}/${reviewer.id}/${crypto.randomUUID()}.${extension}`;
+    const { data: signed, error } = await supabaseAdmin.storage
+      .from("submissions")
+      .createSignedUploadUrl(path);
+    if (error || !signed) throw new Error("Could not prepare the upload.");
+    return { path, token: signed.token };
+  });
+
 export const submitInitialReview = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
@@ -426,8 +479,15 @@ export const submitInitialReview = createServerFn({ method: "POST" })
       .object({
         submissionId: z.string().uuid(),
         action: z.enum(["accept", "formatting", "decline"]),
-        comments: z.string().trim().min(1, "Please add comments for the author.").max(20000),
+        comments: z.string().trim().max(20000).default(""),
+        filePath: z.string().max(500).optional(),
+        fileName: z.string().max(255).optional(),
       })
+      .refine(
+        (v) => Boolean(v.comments || (v.filePath && v.fileName)),
+        "Write comments or return an annotated copy.",
+      )
+      .refine((v) => Boolean(v.filePath) === Boolean(v.fileName), "Attachment is incomplete.")
       .parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -479,8 +539,28 @@ export const submitInitialReview = createServerFn({ method: "POST" })
       throw new Error("Your latest review is already waiting for staff approval.");
     }
 
+    if (data.filePath) {
+      const folder = `initial-review-feedback/${data.submissionId}/${reviewer.id}`;
+      const objectName = data.filePath.slice(folder.length + 1);
+      if (
+        !data.filePath.startsWith(`${folder}/`) ||
+        !/^[a-f0-9-]+\.(pdf|doc|docx)$/.test(objectName) ||
+        !/\.(pdf|doc|docx)$/i.test(data.fileName || "")
+      )
+        throw new Error("Invalid annotation attachment.");
+      const { data: objects, error } = await supabaseAdmin.storage
+        .from("submissions")
+        .list(folder, { search: objectName });
+      const object = objects?.find((o) => o.name === objectName);
+      const size = Number(object?.metadata?.size || 0);
+      if (error || !object || size <= 0 || size > 8 * 1024 * 1024)
+        throw new Error("The annotation must be uploaded and under 8 MB.");
+    }
+
     const { error } = await supabaseAdmin.from("editor_recommendations").insert({
       submission_id: data.submissionId,
+      review_file_path: data.filePath ?? null,
+      review_file_name: data.fileName ?? null,
       editor_name: reviewer.name,
       editor_email: reviewer.email,
       action: data.action,

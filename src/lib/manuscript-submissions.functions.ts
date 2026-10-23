@@ -148,6 +148,13 @@ export const submitManuscript = createServerFn({ method: "POST" })
     const email = (context.claims.email as string | undefined) ?? "";
     if (!email) throw new Error("No email on account");
 
+    if (
+      !/\.(doc|docx)$/i.test(data.manuscriptFilename) ||
+      !/\.(doc|docx)$/i.test(data.manuscriptPath) ||
+      !data.supplementaryPaths.some((f) => /\.pdf$/i.test(f.filename) && /\.pdf$/i.test(f.path))
+    ) {
+      throw new Error("Both an editable Word manuscript (.doc/.docx) and a PDF copy are required.");
+    }
     const ownedPrefix = `${context.userId}/`;
     const filePaths = [
       data.manuscriptPath,

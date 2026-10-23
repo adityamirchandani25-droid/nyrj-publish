@@ -173,6 +173,8 @@ export type Database = {
       };
       editor_recommendations: {
         Row: {
+          review_file_path: string | null;
+          review_file_name: string | null;
           action: string;
           comments: string;
           created_at: string;
@@ -186,6 +188,8 @@ export type Database = {
           submission_id: string;
         };
         Insert: {
+          review_file_path?: string | null;
+          review_file_name?: string | null;
           action: string;
           comments?: string;
           created_at?: string;
@@ -199,6 +203,8 @@ export type Database = {
           submission_id: string;
         };
         Update: {
+          review_file_path?: string | null;
+          review_file_name?: string | null;
           action?: string;
           comments?: string;
           created_at?: string;

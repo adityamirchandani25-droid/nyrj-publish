@@ -1,3 +1,4 @@
+import type { ReviewerSubmission } from "./reviewer-submission";
 import { reviewFeedbackSchema } from "./review-feedback";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -752,6 +753,7 @@ export const setReviewerStatus = createServerFn({ method: "POST" })
 /* ----------------------- reviewer-facing operations ----------------------- */
 
 export type InviteView = {
+  submission: ReviewerSubmission | null;
   assignmentId: string;
   title: string;
   abstract: string;
@@ -803,7 +805,9 @@ async function loadInviteByToken(token: string, reviewerToken: string): Promise<
   };
   const canReadManuscript = ["accepted", "review_received", "sent_to_author"].includes(row.status);
   const { signedReviewerManuscript } = await import("./reviewer-resources.server");
+  const { reviewerSubmission } = await import("./reviewer-submission.server");
   return {
+    submission: canReadManuscript ? await reviewerSubmission(row.submission_id) : null,
     assignmentId: row.id,
     title: s.title ?? "",
     abstract: s.abstract ?? "",
@@ -1105,6 +1109,7 @@ export const listMyAssignments = createServerFn({ method: "POST" })
     );
 
     const { signedReviewerManuscript } = await import("./reviewer-resources.server");
+    const { reviewerSubmission } = await import("./reviewer-submission.server");
     return Promise.all(
       list.map(async (x) => {
         const s = byId.get(x.submission_id);
@@ -1112,6 +1117,7 @@ export const listMyAssignments = createServerFn({ method: "POST" })
           x.status,
         );
         return {
+          submission: canReadManuscript ? await reviewerSubmission(x.submission_id) : null,
           assignmentId: x.id,
           submissionId: x.submission_id,
           token: x.invite_token,

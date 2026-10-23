@@ -1,5 +1,6 @@
 import { supabaseAdmin as db } from "@/integrations/supabase/client.server";
 import { MASTER_STAFF_EMAILS } from "./staff-recipients";
+import { publicSiteUrl } from "./site-url.server";
 import { reviewStatus } from "./review-workflow";
 
 // Page every query: PostgREST's default response cap must not hide old records.
@@ -271,7 +272,7 @@ export async function sendRevisionReminders() {
         replyTo: "NYRJINFO@gmail.com",
         templateData: {
           title: claim.title,
-          resubmitUrl: `${process.env.PUBLIC_SITE_URL || "https://nyrj.org"}/resubmit?token=${claim.token}`,
+          resubmitUrl: `${publicSiteUrl()}/resubmit?token=${claim.token}`,
         },
       });
       if (!delivered.sent) throw new Error("Recipient suppressed by email service.");
