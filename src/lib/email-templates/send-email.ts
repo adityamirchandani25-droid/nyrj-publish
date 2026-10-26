@@ -16,8 +16,12 @@ const SEND_TIMEOUT_MS = 8_000;
 const RETRY_DELAYS_MS = [300];
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
+/** The request may have reached SendGrid; reconcile before another attempt. */
+export class DeliveryUncertainError extends Error {}
+
 export type SendTemplateEmailResult =
-  { sent: true } | { sent: false; reason: "recipient_suppressed" };
+  | { sent: true; providerMessageId: string | null }
+  | { sent: false; reason: "recipient_suppressed" };
 
 export interface SendTemplateEmailOptions {
   templateData?: Record<string, unknown>;
@@ -134,8 +138,9 @@ export async function sendTemplateEmail(
     }));
   }
 
+  let providerMessageId: string | null = null;
   try {
-    await deliverViaSendGrid(body);
+    providerMessageId = await deliverViaSendGrid(body);
   } catch (error) {
     const detail = errorMessage(error);
     await logSentEmail({
@@ -162,7 +167,7 @@ export async function sendTemplateEmail(
     error: null,
   });
 
-  return { sent: true };
+  return { sent: true, providerMessageId };
 }
 
 /**
@@ -229,7 +234,7 @@ export async function resendRenderedEmail(email: RenderedEmail): Promise<void> {
   await deliverViaSendGrid(body);
 }
 
-async function deliverViaSendGrid(body: Record<string, unknown>): Promise<void> {
+async function deliverViaSendGrid(body: Record<string, unknown>): Promise<string | null> {
   const apiKey = process.env["SENDGRID_API_KEY"]?.trim();
   if (!apiKey) throw new Error("SENDGRID_API_KEY is not configured");
 
@@ -247,7 +252,7 @@ async function deliverViaSendGrid(body: Record<string, unknown>): Promise<void> 
         signal: controller.signal,
       });
 
-      if (res.ok) return;
+      if (res.ok) return res.headers.get("x-message-id");
 
       const detail = (await res.text().catch(() => "")).slice(0, 500);
       const message = `SendGrid ${res.status}: ${detail || res.statusText}`;
@@ -255,20 +260,24 @@ async function deliverViaSendGrid(body: Record<string, unknown>): Promise<void> 
         throw new Error(message);
       }
     } catch (error) {
-      if (attempt === RETRY_DELAYS_MS.length || !isRetryableError(error)) {
-        if (error instanceof Error && error.name === "AbortError") {
-          throw new Error(`SendGrid request timed out after ${SEND_TIMEOUT_MS}ms`, {
-            cause: error,
-          });
-        }
-        throw error;
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new DeliveryUncertainError(`SendGrid request timed out after ${SEND_TIMEOUT_MS}ms`, {
+          cause: error,
+        });
       }
+      if (error instanceof TypeError) {
+        throw new DeliveryUncertainError(`SendGrid network result is unknown: ${error.message}`, {
+          cause: error,
+        });
+      }
+      if (attempt === RETRY_DELAYS_MS.length || !isRetryableError(error)) throw error;
     } finally {
       clearTimeout(timeout);
     }
 
     await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
   }
+  return null;
 }
 
 function isRetryableStatus(status: number) {
@@ -276,9 +285,7 @@ function isRetryableStatus(status: number) {
 }
 
 function isRetryableError(error: unknown) {
-  if (!(error instanceof Error)) return true;
-  if (error.name === "AbortError") return true;
-  return !/^SendGrid 4\d\d:/.test(error.message);
+  return error instanceof Error && /^SendGrid (408|429|5\d\d):/.test(error.message);
 }
 
 function errorMessage(error: unknown) {

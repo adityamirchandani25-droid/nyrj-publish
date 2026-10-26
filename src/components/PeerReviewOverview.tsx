@@ -101,6 +101,7 @@ export function PeerReviewOverview({ refreshKey }: { refreshKey: number }) {
                       : ""}
                   {p.published && !p.libraryOnly ? " · Published in library" : ""}
                   {p.deleted_at ? " · In trash" : ""}
+                  {p.current_version > 1 ? ` · New Revision v${p.current_version}` : ""}
                 </p>
               </div>
               <span className="text-sm text-accent">{p.reviewStatus}</span>

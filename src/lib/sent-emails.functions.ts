@@ -93,6 +93,11 @@ export const retrySentEmail = createServerFn({ method: "POST" })
     if (error) throw new Error("Could not load the failed email. Please try again.");
     if (!row) throw new Error("That email record no longer exists.");
     if (row.status !== "failed") return { attempted: 0, sent: 0, failed: 0 };
+    if (["reviewer-invitation", "reviewer-revision", "revision-received"].includes(row.template)) {
+      throw new Error(
+        "This message is managed by the peer notification outbox. Use the assignment reminder control or check notification issues before retrying.",
+      );
+    }
 
     const sent = await retryRow(row as SentEmailRow);
     return { attempted: 1, sent: sent ? 1 : 0, failed: sent ? 0 : 1 };
@@ -112,6 +117,7 @@ export const retryFailedEmails = createServerFn({ method: "POST" })
         "id, created_at, template, to_email, subject, html, text_body, reply_to, status, error",
       )
       .eq("status", "failed")
+      .not("template", "in", '("reviewer-invitation","reviewer-revision","revision-received")')
       .order("created_at", { ascending: true })
       .limit(data.limit ?? 20);
     if (error) throw new Error("Could not load failed emails. Please try again.");
@@ -125,6 +131,11 @@ export const retryFailedEmails = createServerFn({ method: "POST" })
   });
 
 async function retryRow(row: SentEmailRow): Promise<boolean> {
+  // These events have their own idempotent outbox. Retrying an archived copy
+  // bypasses assignment/version checks and can duplicate a queued delivery.
+  if (["reviewer-invitation", "reviewer-revision", "revision-received"].includes(row.template)) {
+    return false;
+  }
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { resendRenderedEmail } = await import("./email-templates/send-email");
 

@@ -5,6 +5,8 @@ import type { TemplateEntry } from "./registry";
 export interface RevisionReceivedProps {
   title?: string;
   version?: number;
+  previousVersion?: number;
+  submittedAt?: string;
   submitterEmail?: string;
   toAuthor?: boolean;
   note?: string;
@@ -14,6 +16,8 @@ export interface RevisionReceivedProps {
 export function RevisionReceivedEmail({
   title = "a manuscript",
   version = 2,
+  previousVersion,
+  submittedAt,
   submitterEmail = "",
   toAuthor = false,
   note = "",
@@ -38,6 +42,12 @@ export function RevisionReceivedEmail({
               Version {version} of <strong>&ldquo;{title}&rdquo;</strong> was uploaded
               {submitterEmail ? ` by ${submitterEmail}` : ""}. Earlier versions are kept on the
               submission for comparison.
+            </Text>
+          )}
+          {!toAuthor && (
+            <Text style={{ fontSize: "15px" }}>
+              Previous version: {previousVersion ?? version - 1}. Submitted:{" "}
+              {submittedAt || "See dashboard"}.
             </Text>
           )}
           {note ? (

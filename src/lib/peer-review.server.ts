@@ -162,8 +162,7 @@ export async function runReviewReminders(): Promise<{
   staffDeadlineFollowups: number;
 }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { sendTemplateEmail, sendTemplateEmailToMany } =
-    await import("./email-templates/send-email");
+  const { sendTemplateEmailToMany } = await import("./email-templates/send-email");
   const SITE_URL = "https://nyrj.org";
   const now = Date.now();
   const days = (n: number) => new Date(now - n * 24 * 60 * 60 * 1000).toISOString();
@@ -388,10 +387,17 @@ export async function runReviewReminders(): Promise<{
     if (!overdue) continue;
 
     try {
-      await sendTemplateEmail("reviewer-reminder", r.reviewer_email, {
-        idempotencyKey: `reviewer-reminder-${r.id}-${awaitingResponse ? "invite" : "review"}`,
+      const { queuePeerNotification, processPeerNotification } =
+        await import("./peer-notifications.server");
+      const queued = await queuePeerNotification({
+        key: `reviewer-reminder-${r.id}-${awaitingResponse ? "invite" : "review"}`,
+        submissionId: r.submission_id,
+        assignmentId: r.id,
+        event: "reviewer_reminder",
+        template: "reviewer-reminder",
+        recipient: r.reviewer_email,
         replyTo: "NYRJINFO@gmail.com",
-        templateData: {
+        data: {
           reviewerName: r.reviewer_name || "Reviewer",
           assignmentId: r.id,
           title,
@@ -400,6 +406,10 @@ export async function runReviewReminders(): Promise<{
           awaitingResponse,
         },
       });
+      const delivery = await processPeerNotification(queued.id);
+      if (delivery.status !== "provider_accepted" && queued.status !== "provider_accepted") {
+        throw new Error("Reviewer reminder is queued or needs provider reconciliation.");
+      }
       const sentAt = new Date().toISOString();
       const { error: reminderError } = await supabaseAdmin
         .from("review_assignments")

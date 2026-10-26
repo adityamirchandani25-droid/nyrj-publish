@@ -172,12 +172,19 @@ export const assignReviewer = createServerFn({ method: "POST" })
     const s = sub as { title: string; keywords: string; research_domain: string };
     const inviteUrl = `${SITE_URL}/review?token=${token}`;
     let emailSent = false;
+    let emailStatus = "queued";
     try {
-      const { sendTemplateEmail } = await import("./email-templates/send-email");
-      await sendTemplateEmail("reviewer-invitation", reviewerEmail, {
-        idempotencyKey: `reviewer-invite-${token}`,
+      const { queuePeerNotification, processPeerNotification } =
+        await import("./peer-notifications.server");
+      const queued = await queuePeerNotification({
+        key: `reviewer-invite-${assignmentId}`,
+        submissionId: data.submissionId,
+        assignmentId,
+        event: "reviewer_invitation",
+        template: "reviewer-invitation",
+        recipient: reviewerEmail,
         replyTo: "NYRJINFO@gmail.com",
-        templateData: {
+        data: {
           reviewerName: data.reviewerName || "Reviewer",
           assignmentId,
           title: s.title,
@@ -187,13 +194,20 @@ export const assignReviewer = createServerFn({ method: "POST" })
           inviteUrl,
         },
       });
+      const delivery = await processPeerNotification(queued.id);
+      if (delivery.status === "failed") throw new Error(delivery.error);
+      emailStatus = delivery.status;
+      emailSent = delivery.status === "provider_accepted" || queued.status === "provider_accepted";
       await audit(
         data.submissionId,
         data.assignedBy || "staff",
-        "Invitation email sent",
+        emailSent
+          ? "Invitation accepted by provider"
+          : delivery.status === "uncertain"
+            ? "Invitation outcome unknown"
+            : "Invitation queued",
         `To ${data.reviewerEmail} · due ${fmtDate(dueAt)} · secure portal access required`,
       );
-      emailSent = true;
     } catch (e) {
       console.error("[server] reviewer invite email failed:", e);
       await audit(
@@ -203,7 +217,7 @@ export const assignReviewer = createServerFn({ method: "POST" })
         `To ${data.reviewerEmail}`,
       );
     }
-    return { ok: true, inviteUrl, emailSent };
+    return { ok: true, inviteUrl, emailSent, emailStatus };
   });
 
 /** Re-sends the secure invitation link. Manuscript files remain behind reviewer login. */
@@ -252,11 +266,17 @@ export const resendReviewerInvitation = createServerFn({ method: "POST" })
     ) {
       throw new Error("This manuscript is closed and the invitation cannot be resent.");
     }
-    const { sendTemplateEmail } = await import("./email-templates/send-email");
-    await sendTemplateEmail("reviewer-invitation", r.reviewer_email, {
-      idempotencyKey: `reviewer-invite-resend-${data.assignmentId}-${Date.now()}`,
+    const { queuePeerNotification, processPeerNotification } =
+      await import("./peer-notifications.server");
+    const queued = await queuePeerNotification({
+      key: `reviewer-resend-${data.assignmentId}-${Math.floor(Date.now() / 60_000)}`,
+      submissionId: r.submission_id,
+      assignmentId: data.assignmentId,
+      event: "reviewer_reminder",
+      template: "reviewer-invitation",
+      recipient: r.reviewer_email,
       replyTo: "NYRJINFO@gmail.com",
-      templateData: {
+      data: {
         reviewerName: r.reviewer_name || "Reviewer",
         assignmentId: data.assignmentId,
         title: s.title ?? "",
@@ -266,13 +286,25 @@ export const resendReviewerInvitation = createServerFn({ method: "POST" })
         inviteUrl: `${SITE_URL}/review?token=${r.invite_token}`,
       },
     });
+    const delivery = await processPeerNotification(queued.id);
+    if (delivery.status === "failed") throw new Error(delivery.error);
     await audit(
       r.submission_id,
       "staff",
-      "Secure reviewer invitation resent",
+      delivery.status === "provider_accepted" || queued.status === "provider_accepted"
+        ? "Secure reviewer invitation accepted by provider"
+        : "Secure reviewer invitation queued",
       `To ${r.reviewer_email}`,
     );
-    return { ok: true };
+    return {
+      ok: true,
+      status:
+        delivery.status === "provider_accepted" || queued.status === "provider_accepted"
+          ? "provider_accepted"
+          : delivery.status === "uncertain"
+            ? "uncertain"
+            : "queued",
+    };
   });
 
 export const listAssignments = createServerFn({ method: "POST" })

@@ -10,19 +10,59 @@ export type Database = {
   };
   public: {
     Tables: {
+      peer_notification_rollout: ServerTable<{ id: boolean; installed_at: string }>;
+      peer_notification_outbox: ServerTable<{
+        id: string;
+        idempotency_key: string;
+        submission_id: string | null;
+        assignment_id: string | null;
+        manuscript_version: number | null;
+        event: string;
+        template: string;
+        recipient: string;
+        template_data: Json;
+        reply_to: string | null;
+        status: string;
+        attempts: number;
+        next_attempt_at: string;
+        claimed_at: string | null;
+        provider_accepted_at: string | null;
+        delivered_at: string | null;
+        provider_message_id: string | null;
+        last_error: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
       review_feedback_versions: ServerTable<{
-        id: string; assignment_id: string; submission_id: string; comments: string;
-        file_path: string | null; file_name: string | null; submitted_at: string;
-        recorded_at: string; notification_required: boolean;
+        id: string;
+        assignment_id: string;
+        submission_id: string;
+        comments: string;
+        file_path: string | null;
+        file_name: string | null;
+        submitted_at: string;
+        recorded_at: string;
+        notification_required: boolean;
       }>;
       review_staff_notifications: ServerTable<{
-        id: string; version_id: string; recipient: string; status: string;
-        claimed_at: string | null; sent_at: string | null; error: string | null;
+        id: string;
+        version_id: string;
+        recipient: string;
+        status: string;
+        claimed_at: string | null;
+        sent_at: string | null;
+        error: string | null;
       }>;
       revision_reminder_log: ServerTable<{
-        id: string; submission_id: string; revision_requested_at: string;
-        reminder_number: number; recipient: string; status: string;
-        attempted_at: string; sent_at: string | null; error: string | null;
+        id: string;
+        submission_id: string;
+        revision_requested_at: string;
+        reminder_number: number;
+        recipient: string;
+        status: string;
+        attempted_at: string;
+        sent_at: string | null;
+        error: string | null;
       }>;
       api_rate_limits: {
         Row: {
@@ -1053,6 +1093,7 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      claim_peer_notification: { Args: { p_id: string }; Returns: Json };
       claim_revision_reminder: { Args: { p_submission_id: string }; Returns: Json };
       consume_ai_chat_quota: {
         Args: { p_identity_hash: string };

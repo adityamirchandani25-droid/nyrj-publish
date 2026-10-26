@@ -18,6 +18,9 @@ export type AuthorManuscript = {
   createdAt: string;
   updatedAt: string;
   currentVersion: number;
+  manuscriptUrl: string | null;
+  manuscriptFilename: string | null;
+  submittedAt: string;
   resubmitToken: string | null;
   feedback: AuthorFeedback[];
   versions: Array<{
@@ -41,7 +44,7 @@ export const getAuthorDashboard = createServerFn({ method: "GET" })
     const { data: papers, error } = await supabaseAdmin
       .from("manuscript_submissions")
       .select(
-        "id, title, status, decision, created_at, updated_at, current_version, resubmit_token",
+        "id, title, status, decision, created_at, updated_at, current_version, resubmit_token, manuscript_path, manuscript_filename",
       )
       .eq("submitter_email", email)
       .is("deleted_at", null)
@@ -87,6 +90,21 @@ export const getAuthorDashboard = createServerFn({ method: "GET" })
         }),
     );
 
+    const currentFiles = new Map<string, string>();
+    await Promise.all(
+      papers
+        .filter((paper) => paper.manuscript_path)
+        .map(async (paper) => {
+          const { data: signed, error: signError } = await supabaseAdmin.storage
+            .from("submissions")
+            .createSignedUrl(paper.manuscript_path!, 60 * 10, {
+              download: paper.manuscript_filename || "manuscript",
+            });
+          if (signError) throw new Error("Your manuscript could not be opened. Please try again.");
+          if (signed?.signedUrl) currentFiles.set(paper.id, signed.signedUrl);
+        }),
+    );
+
     return papers.map((paper) => {
       const feedback: AuthorFeedback[] = [
         ...(reviews.data ?? [])
@@ -123,6 +141,12 @@ export const getAuthorDashboard = createServerFn({ method: "GET" })
         createdAt: paper.created_at,
         updatedAt: paper.updated_at,
         currentVersion: paper.current_version,
+        manuscriptUrl: currentFiles.get(paper.id) ?? null,
+        manuscriptFilename: paper.manuscript_filename,
+        submittedAt:
+          (versions.data ?? []).find(
+            (row) => row.submission_id === paper.id && row.version === paper.current_version,
+          )?.created_at ?? paper.created_at,
         resubmitToken: paper.status === "waiting for edits" ? paper.resubmit_token : null,
         feedback,
         versions: (versions.data ?? [])

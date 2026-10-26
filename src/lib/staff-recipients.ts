@@ -2,7 +2,7 @@
 export const MASTER_STAFF_EMAILS = [
   "keyaanmerchant24@gmail.com",
   "Madhavarora529@gmail.com",
-  "Anirudh.Budumuru@gmail.com",
+  "anirudh.budumuru@gmail.com",
 ] as const;
 
 /** Reviewer follow-up updates also go to the journal mailbox. */

@@ -1,4 +1,5 @@
 import { PeerReviewOverview } from "@/components/PeerReviewOverview";
+import { ReviewerMonitor } from "@/components/ReviewerMonitor";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
@@ -201,6 +202,7 @@ function AdminSubmissions() {
           author's Track Submissions page immediately.
         </p>
 
+        <ReviewerMonitor refreshKey={dataRefreshKey} />
         <PeerReviewOverview refreshKey={dataRefreshKey} />
 
         <div className="mt-6 flex flex-wrap gap-2">

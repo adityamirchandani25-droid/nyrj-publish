@@ -21,6 +21,7 @@ import { template as editorAccountApprovedTemplate } from "./editor-account-appr
 import { template as editorRecommendationTemplate } from "./editor-recommendation";
 import { template as authorRevisionRequestTemplate } from "./author-revision-request";
 import { template as revisionReceivedTemplate } from "./revision-received";
+import { template as reviewerRevisionTemplate } from "./reviewer-revision";
 import { template as authorRevisionReminderTemplate } from "./author-revision-reminder";
 import { template as authorRevisionOverdueTemplate } from "./author-revision-overdue";
 import { template as initialReviewWorkloadTemplate } from "./initial-review-workload";
@@ -63,6 +64,7 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   "editor-recommendation": editorRecommendationTemplate,
   "author-revision-request": authorRevisionRequestTemplate,
   "revision-received": revisionReceivedTemplate,
+  "reviewer-revision": reviewerRevisionTemplate,
   "author-revision-reminder": authorRevisionReminderTemplate,
   "author-revision-overdue": authorRevisionOverdueTemplate,
   "initial-review-workload": initialReviewWorkloadTemplate,

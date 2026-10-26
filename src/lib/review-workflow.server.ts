@@ -25,7 +25,7 @@ export async function reviewOverview() {
       db
         .from("manuscript_submissions")
         .select(
-          "id,title,submitter_email,status,decision,deleted_at,updated_at,revision_requested_at,revision_reminders_paused",
+          "id,title,submitter_email,status,decision,deleted_at,updated_at,current_version,revision_requested_at,revision_reminders_paused",
         )
         .order("id")
         .range(a, b),
@@ -93,6 +93,7 @@ export async function reviewOverview() {
         deleted_at: null,
         revision_requested_at: null,
         revision_reminders_paused: false,
+        current_version: 1,
         legacy: true,
         libraryOnly: false,
         published: false,
@@ -111,6 +112,7 @@ export async function reviewOverview() {
         deleted_at: null,
         revision_requested_at: null,
         revision_reminders_paused: false,
+        current_version: 1,
         legacy: true,
         libraryOnly: true,
         published: true,

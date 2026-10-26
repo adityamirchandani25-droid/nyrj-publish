@@ -20,7 +20,7 @@ export async function answerStaffQuestion(question: string) {
   const q = question.toLowerCase();
   const active = papers.filter((p) => p.reviewStatus !== "completed");
   const paperLine = (p: (typeof papers)[number]) =>
-    `${p.title} — ${p.status}; decision: ${p.decision}${p.libraryOnly ? " (published library record)" : p.legacy ? " (legacy tracking record)" : ""}${p.published && !p.libraryOnly ? " (published in library)" : ""}${p.deleted_at ? " (in trash)" : ""}`;
+    `${p.title} — ${p.current_version > 1 ? `New revision v${p.current_version} · ` : ""}${p.status}; decision: ${p.decision}${p.libraryOnly ? " (published library record)" : p.legacy ? " (legacy tracking record)" : ""}${p.published && !p.libraryOnly ? " (published in library)" : ""}${p.deleted_at ? " (in trash)" : ""}${p.current_version > 1 && !p.legacy ? ` · [Open latest submission](/admin/submissions?review=${p.id})` : ""}`;
   const quoted = question.match(/["“](.+?)["”]/)?.[1]?.toLowerCase();
   const matches = papers.filter((p) =>
     quoted

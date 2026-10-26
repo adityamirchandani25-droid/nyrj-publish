@@ -44,7 +44,11 @@ export function SentEmails() {
     setNotice(null);
     try {
       const result = await retrySentEmail({ data: { staffToken: staffToken(), id } });
-      setNotice(result.sent === 1 ? "Email sent successfully." : "Nothing needed to be retried.");
+      setNotice(
+        result.sent === 1
+          ? "Email provider accepted the request; inbox delivery is unconfirmed."
+          : "Nothing needed to be retried.",
+      );
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not retry the email.");
@@ -64,7 +68,7 @@ export function SentEmails() {
       setNotice(
         result.attempted === 0
           ? "There are no failed emails to retry."
-          : `Retried ${result.attempted}: ${result.sent} sent, ${result.failed} still failed.`,
+          : `Retried ${result.attempted}: ${result.sent} accepted by provider, ${result.failed} still failed. Inbox delivery is unconfirmed.`,
       );
       await load();
     } catch (e) {

@@ -42,6 +42,7 @@ import { Route as SubmitIndexRouteImport } from './routes/submit.index'
 import { Route as SubmitApplyRouteImport } from './routes/submit.apply'
 import { Route as ApiPublicAssignInitialReviewersRouteImport } from './routes/api/public/assign-initial-reviewers'
 import { Route as ApiPublicEditorialFollowupsRouteImport } from './routes/api/public/editorial-followups'
+import { Route as ApiPublicPeerNotificationsRouteImport } from './routes/api/public/peer-notifications'
 import { Route as ApiPublicRefreshCitationsRouteImport } from './routes/api/public/refresh-citations'
 import { Route as ApiPublicReviewRemindersRouteImport } from './routes/api/public/review-reminders'
 import { Route as ApiPublicSyncReviewEmailsRouteImport } from './routes/api/public/sync-review-emails'
@@ -215,6 +216,12 @@ const ApiPublicEditorialFollowupsRoute =
     path: '/api/public/editorial-followups',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicPeerNotificationsRoute =
+  ApiPublicPeerNotificationsRouteImport.update({
+    id: '/api/public/peer-notifications',
+    path: '/api/public/peer-notifications',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicRefreshCitationsRoute =
   ApiPublicRefreshCitationsRouteImport.update({
     id: '/api/public/refresh-citations',
@@ -279,6 +286,7 @@ export interface FileRoutesByFullPath {
   '/submit/': typeof SubmitIndexRoute
   '/api/public/assign-initial-reviewers': typeof ApiPublicAssignInitialReviewersRoute
   '/api/public/editorial-followups': typeof ApiPublicEditorialFollowupsRoute
+  '/api/public/peer-notifications': typeof ApiPublicPeerNotificationsRoute
   '/api/public/refresh-citations': typeof ApiPublicRefreshCitationsRoute
   '/api/public/review-reminders': typeof ApiPublicReviewRemindersRoute
   '/api/public/sync-review-emails': typeof ApiPublicSyncReviewEmailsRoute
@@ -319,6 +327,7 @@ export interface FileRoutesByTo {
   '/submit': typeof SubmitIndexRoute
   '/api/public/assign-initial-reviewers': typeof ApiPublicAssignInitialReviewersRoute
   '/api/public/editorial-followups': typeof ApiPublicEditorialFollowupsRoute
+  '/api/public/peer-notifications': typeof ApiPublicPeerNotificationsRoute
   '/api/public/refresh-citations': typeof ApiPublicRefreshCitationsRoute
   '/api/public/review-reminders': typeof ApiPublicReviewRemindersRoute
   '/api/public/sync-review-emails': typeof ApiPublicSyncReviewEmailsRoute
@@ -360,6 +369,7 @@ export interface FileRoutesById {
   '/submit/': typeof SubmitIndexRoute
   '/api/public/assign-initial-reviewers': typeof ApiPublicAssignInitialReviewersRoute
   '/api/public/editorial-followups': typeof ApiPublicEditorialFollowupsRoute
+  '/api/public/peer-notifications': typeof ApiPublicPeerNotificationsRoute
   '/api/public/refresh-citations': typeof ApiPublicRefreshCitationsRoute
   '/api/public/review-reminders': typeof ApiPublicReviewRemindersRoute
   '/api/public/sync-review-emails': typeof ApiPublicSyncReviewEmailsRoute
@@ -402,6 +412,7 @@ export interface FileRouteTypes {
     | '/submit/'
     | '/api/public/assign-initial-reviewers'
     | '/api/public/editorial-followups'
+    | '/api/public/peer-notifications'
     | '/api/public/refresh-citations'
     | '/api/public/review-reminders'
     | '/api/public/sync-review-emails'
@@ -442,6 +453,7 @@ export interface FileRouteTypes {
     | '/submit'
     | '/api/public/assign-initial-reviewers'
     | '/api/public/editorial-followups'
+    | '/api/public/peer-notifications'
     | '/api/public/refresh-citations'
     | '/api/public/review-reminders'
     | '/api/public/sync-review-emails'
@@ -482,6 +494,7 @@ export interface FileRouteTypes {
     | '/submit/'
     | '/api/public/assign-initial-reviewers'
     | '/api/public/editorial-followups'
+    | '/api/public/peer-notifications'
     | '/api/public/refresh-citations'
     | '/api/public/review-reminders'
     | '/api/public/sync-review-emails'
@@ -522,6 +535,7 @@ export interface RootRouteChildren {
   SubmitIndexRoute: typeof SubmitIndexRoute
   ApiPublicAssignInitialReviewersRoute: typeof ApiPublicAssignInitialReviewersRoute
   ApiPublicEditorialFollowupsRoute: typeof ApiPublicEditorialFollowupsRoute
+  ApiPublicPeerNotificationsRoute: typeof ApiPublicPeerNotificationsRoute
   ApiPublicRefreshCitationsRoute: typeof ApiPublicRefreshCitationsRoute
   ApiPublicReviewRemindersRoute: typeof ApiPublicReviewRemindersRoute
   ApiPublicSyncReviewEmailsRoute: typeof ApiPublicSyncReviewEmailsRoute
@@ -762,6 +776,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicEditorialFollowupsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/peer-notifications': {
+      id: '/api/public/peer-notifications'
+      path: '/api/public/peer-notifications'
+      fullPath: '/api/public/peer-notifications'
+      preLoaderRoute: typeof ApiPublicPeerNotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/refresh-citations': {
       id: '/api/public/refresh-citations'
       path: '/api/public/refresh-citations'
@@ -845,6 +866,7 @@ const rootRouteChildren: RootRouteChildren = {
   SubmitIndexRoute: SubmitIndexRoute,
   ApiPublicAssignInitialReviewersRoute: ApiPublicAssignInitialReviewersRoute,
   ApiPublicEditorialFollowupsRoute: ApiPublicEditorialFollowupsRoute,
+  ApiPublicPeerNotificationsRoute: ApiPublicPeerNotificationsRoute,
   ApiPublicRefreshCitationsRoute: ApiPublicRefreshCitationsRoute,
   ApiPublicReviewRemindersRoute: ApiPublicReviewRemindersRoute,
   ApiPublicSyncReviewEmailsRoute: ApiPublicSyncReviewEmailsRoute,

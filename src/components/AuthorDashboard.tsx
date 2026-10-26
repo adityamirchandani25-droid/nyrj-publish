@@ -84,8 +84,20 @@ export function AuthorDashboard({ email }: { email: string }) {
                 <h3 className="font-serif text-xl text-primary">{paper.title}</h3>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {paper.status} · version {paper.currentVersion} · updated{" "}
-                  {new Date(paper.updatedAt).toLocaleDateString()}
+                  {new Date(paper.submittedAt).toLocaleString()}
                 </p>
+                <p className="mt-1 text-xs text-accent">
+                  Version {paper.currentVersion} submitted successfully
+                </p>
+                {paper.manuscriptUrl && (
+                  <a
+                    className="mt-2 inline-block text-sm text-primary underline underline-offset-4"
+                    href={paper.manuscriptUrl}
+                  >
+                    Open current manuscript
+                    {paper.manuscriptFilename ? `: ${paper.manuscriptFilename}` : ""}
+                  </a>
+                )}
               </div>
               {paper.resubmitToken && (
                 <Link

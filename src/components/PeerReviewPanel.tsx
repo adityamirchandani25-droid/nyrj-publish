@@ -109,8 +109,10 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
       setName("");
       setNote(
         result.emailSent
-          ? "Secure invitation sent. The reviewer must sign in with an approved account and has 15 days from today."
-          : "The assignment was created, but its invitation email failed. Check SendGrid, then use Resend secure invitation.",
+          ? "SendGrid accepted the invitation request. Inbox delivery is not yet confirmed. The reviewer must sign in with an approved account."
+          : result.emailStatus === "uncertain"
+            ? "The provider response is unknown. Check SendGrid activity and notification issues before retrying."
+            : "The assignment was created, but its invitation is queued for retry. Check notification status before resending.",
       );
       await load();
     } catch (err) {
@@ -221,10 +223,16 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
                     setError(null);
                     setNote(null);
                     try {
-                      await resendReviewerInvitation({
+                      const result = await resendReviewerInvitation({
                         data: { staffToken: staffToken(), assignmentId: a.id },
                       });
-                      setNote(`Secure invitation resent to ${a.reviewer_email}.`);
+                      setNote(
+                        result.status === "provider_accepted"
+                          ? `SendGrid accepted the invitation to ${a.reviewer_email}; inbox delivery is not yet confirmed.`
+                          : result.status === "uncertain"
+                            ? `The provider response for ${a.reviewer_email} is unknown. Reconcile before retrying.`
+                            : `Invitation queued for ${a.reviewer_email}.`,
+                      );
                       await load();
                     } catch (err) {
                       setError(err instanceof Error ? err.message : "Could not resend invitation.");

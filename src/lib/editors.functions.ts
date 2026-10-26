@@ -802,35 +802,10 @@ export const finalizeRevision = createServerFn({ method: "POST" })
     }
 
     try {
-      const { sendTemplateEmail, sendTemplateEmailToMany } =
-        await import("./email-templates/send-email");
-      const results = await Promise.allSettled([
-        sendTemplateEmailToMany("revision-received", STAFF_RECIPIENTS, (to) => ({
-          idempotencyKey: `revision-staff-${row.id}-v${nextVersion}-${to}`,
-          replyTo: row.submitter_email,
-          templateData: {
-            title: row.title,
-            version: nextVersion,
-            submissionId: row.id,
-            submitterEmail: row.submitter_email,
-            toAuthor: false,
-            note: data.note,
-          },
-        })),
-        sendTemplateEmail("revision-received", row.submitter_email, {
-          idempotencyKey: `revision-author-${row.id}-v${nextVersion}`,
-          replyTo: "NYRJINFO@gmail.com",
-          templateData: {
-            title: row.title,
-            version: nextVersion,
-            submitterEmail: row.submitter_email,
-            toAuthor: true,
-            note: "",
-          },
-        }),
-      ]);
-      const failures = results.filter((result) => result.status === "rejected");
-      if (failures.length) throw new Error(`${failures.length} revision email group(s) failed`);
+      const { queueRevisionNotifications, processPeerNotification } =
+        await import("./peer-notifications.server");
+      const jobs = await queueRevisionNotifications(row.id, nextVersion);
+      await Promise.allSettled(jobs.map((job) => processPeerNotification(job.id)));
     } catch (err) {
       console.error("[server] revision emails failed:", err);
     }
