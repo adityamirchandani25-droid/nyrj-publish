@@ -214,7 +214,7 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
                 {new Date(a.due_at).toLocaleDateString()}
                 {a.assigned_by ? ` · by ${a.assigned_by}` : ""}
               </p>
-              {!["declined", "no_response"].includes(a.status) && (
+              {["invited", "accepted", "review_received", "sent_to_author"].includes(a.status) && (
                 <button
                   className={`${btnGhost} mt-2`}
                   disabled={busy}
@@ -241,7 +241,9 @@ export function PeerReviewPanel({ submissionId }: { submissionId: string }) {
                     }
                   }}
                 >
-                  Resend secure invitation
+                  {["review_received", "sent_to_author"].includes(a.status)
+                    ? "Resend latest revision link"
+                    : "Resend secure invitation"}
                 </button>
               )}
 

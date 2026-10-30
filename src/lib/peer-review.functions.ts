@@ -242,12 +242,14 @@ export const resendReviewerInvitation = createServerFn({ method: "POST" })
       invite_token: string;
       status: string;
     };
-    if (!["invited", "accepted"].includes(r.status)) {
+    const invitationStatuses = ["invited", "accepted"];
+    const revisionStatuses = ["review_received", "sent_to_author"];
+    if (![...invitationStatuses, ...revisionStatuses].includes(r.status)) {
       throw new Error("This reviewer invitation is no longer active.");
     }
     const { data: sub } = await supabaseAdmin
       .from("manuscript_submissions")
-      .select("title, keywords, research_domain, status, decision, deleted_at")
+      .select("title, keywords, research_domain, status, decision, deleted_at, current_version")
       .eq("id", r.submission_id)
       .single();
     const s = (sub ?? {}) as {
@@ -257,6 +259,7 @@ export const resendReviewerInvitation = createServerFn({ method: "POST" })
       status?: string;
       decision?: string;
       deleted_at?: string | null;
+      current_version?: number;
     };
     if (
       !sub ||
@@ -268,23 +271,34 @@ export const resendReviewerInvitation = createServerFn({ method: "POST" })
     }
     const { queuePeerNotification, processPeerNotification } =
       await import("./peer-notifications.server");
+    const isRevision = revisionStatuses.includes(r.status);
+    const version = Math.max(1, s.current_version ?? 1);
     const queued = await queuePeerNotification({
       key: `reviewer-resend-${data.assignmentId}-${Math.floor(Date.now() / 60_000)}`,
       submissionId: r.submission_id,
       assignmentId: data.assignmentId,
-      event: "reviewer_reminder",
-      template: "reviewer-invitation",
+      ...(isRevision ? { version } : {}),
+      event: isRevision ? "reviewer_revision" : "reviewer_reminder",
+      template: isRevision ? "reviewer-revision" : "reviewer-invitation",
       recipient: r.reviewer_email,
       replyTo: "NYRJINFO@gmail.com",
-      data: {
-        reviewerName: r.reviewer_name || "Reviewer",
-        assignmentId: data.assignmentId,
-        title: s.title ?? "",
-        researchDomain: s.research_domain ?? "",
-        keywords: s.keywords ?? "",
-        dueDate: fmtDate(r.due_at),
-        inviteUrl: `${SITE_URL}/review?token=${r.invite_token}`,
-      },
+      data: isRevision
+        ? {
+            reviewerName: r.reviewer_name || "Reviewer",
+            title: s.title ?? "",
+            version,
+            submittedAt: "the latest author resubmission",
+            reviewUrl: `${SITE_URL}/review?token=${r.invite_token}`,
+          }
+        : {
+            reviewerName: r.reviewer_name || "Reviewer",
+            assignmentId: data.assignmentId,
+            title: s.title ?? "",
+            researchDomain: s.research_domain ?? "",
+            keywords: s.keywords ?? "",
+            dueDate: fmtDate(r.due_at),
+            inviteUrl: `${SITE_URL}/review?token=${r.invite_token}`,
+          },
     });
     const delivery = await processPeerNotification(queued.id);
     if (delivery.status === "failed") throw new Error(delivery.error);

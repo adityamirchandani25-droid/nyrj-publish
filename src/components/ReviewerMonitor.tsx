@@ -153,7 +153,9 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
                           {p.title} · v{p.version} · {p.status}
                           <br />
                           Due {p.dueAt ? new Date(p.dueAt).toLocaleDateString() : "—"}{" "}
-                          {["invited", "accepted"].includes(p.status) && (
+                          {["invited", "accepted", "review_received", "sent_to_author"].includes(
+                            p.status,
+                          ) && (
                             <button
                               disabled={busy === p.assignmentId}
                               className="ml-2 text-primary underline disabled:opacity-50"
