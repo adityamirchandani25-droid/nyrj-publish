@@ -130,20 +130,25 @@ export const createInitialReviewerAccount = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const { enforceRateLimit } = await import("./rate-limit.server");
+    // Guess protection comes first and is IP-scoped only, so a mistyped code
+    // never burns the reviewer's own email quota. Schools share one IP, so the
+    // limit leaves room for a whole group signing up together.
     await enforceRateLimit({
       scope: "initial-reviewer-account-ip",
-      limit: 5,
+      limit: 20,
       windowSeconds: 10 * 60,
-    });
-    await enforceRateLimit({
-      scope: "initial-reviewer-account-email",
-      limit: 3,
-      windowSeconds: 60 * 60,
-      identity: data.email.toLowerCase(),
     });
     if (!accessCodeMatches(data.accessCode)) {
       throw new Error("The access code is not valid.");
     }
+    // Only valid-code requests consume the per-email quota that protects the
+    // reviewer's inbox from repeated setup emails.
+    await enforceRateLimit({
+      scope: "initial-reviewer-account-email",
+      limit: 6,
+      windowSeconds: 60 * 60,
+      identity: data.email.toLowerCase(),
+    });
     const email = data.email.toLowerCase();
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: reviewerData, error: reviewerError } = await supabaseAdmin
