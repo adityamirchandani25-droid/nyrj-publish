@@ -1,4 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import type { TablesInsert } from "@/integrations/supabase/types";
 
@@ -51,6 +53,24 @@ async function authorize(auth: { password?: string; staffToken?: string }) {
     verifyStaffToken(auth.staffToken);
     return;
   }
+  const token = getRequest()
+    ?.headers.get("authorization")
+    ?.replace(/^Bearer\s+/i, "");
+  if (token) {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token);
+    const user = userData.user;
+    if (!userError && user?.id && user.email) {
+      const { data: account, error: accountError } = await supabaseAdmin
+        .from("ambassador_accounts")
+        .select("id, active, auth_user_id")
+        .eq("auth_user_id", user.id)
+        .eq("active", true)
+        .maybeSingle();
+      if (!accountError && account) return;
+    }
+    if (!auth.password) throw new Error("This account does not have active ambassador access.");
+  }
   const { checkAmbassadorPassword } = await import("./ambassador-auth.server");
   if (!checkAmbassadorPassword(auth.password ?? "")) {
     // The shared password is intentionally memorable, so wrong guesses are
@@ -61,9 +81,104 @@ async function authorize(auth: { password?: string; staffToken?: string }) {
   }
 }
 
-/** Validates the shared ambassador password without changing any data. */
+function accessCodeMatches(candidate: string): boolean {
+  const expected = process.env.AMBASSADOR_ACCESS_CODE ?? process.env.AMBASSADOR_PASSWORD;
+  if (!expected) {
+    throw new Error("Ambassador registration is not configured. Please contact NYRJ staff.");
+  }
+  const left = createHash("sha256").update(candidate, "utf8").digest();
+  const right = createHash("sha256").update(expected, "utf8").digest();
+  return timingSafeEqual(left, right);
+}
+
+export const createAmbassadorAccount = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        name: z.string().trim().min(2, "Enter your full name.").max(120),
+        email: z.string().trim().email("Enter a valid email address.").max(255),
+        password: z.string().min(8, "Use at least 8 characters.").max(200),
+        accessCode: z.string().min(4, "Enter the ambassador access code.").max(128),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { enforceRateLimit } = await import("./rate-limit.server");
+    await enforceRateLimit({ scope: "ambassador-signup-ip", limit: 5, windowSeconds: 10 * 60 });
+    const email = data.email.toLowerCase();
+    await enforceRateLimit({
+      scope: "ambassador-signup-email",
+      limit: 3,
+      windowSeconds: 60 * 60,
+      identity: email,
+    });
+    if (!accessCodeMatches(data.accessCode)) {
+      throw new Error("The ambassador access code is not valid.");
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: existingAccount, error: accountLookupError } = await supabaseAdmin
+      .from("ambassador_accounts")
+      .select("id, auth_user_id, active")
+      .eq("email", email)
+      .maybeSingle();
+    if (accountLookupError) throw new Error("We could not start account setup. Please try again.");
+
+    let userId = existingAccount?.auth_user_id ?? null;
+    let existingUser = Boolean(userId);
+    if (!userId) {
+      const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password: data.password,
+        email_confirm: true,
+        user_metadata: { full_name: data.name, requested_role: "ambassador" },
+      });
+      if (created.user) {
+        userId = created.user.id;
+      } else if (createError && /already|registered|exists/i.test(createError.message)) {
+        existingUser = true;
+        for (let page = 1; page <= 10 && !userId; page += 1) {
+          const { data: users, error: usersError } = await supabaseAdmin.auth.admin.listUsers({
+            page,
+            perPage: 1000,
+          });
+          if (usersError) break;
+          userId = users.users.find((user) => user.email?.toLowerCase() === email)?.id ?? null;
+          if (users.users.length < 1000) break;
+        }
+      } else if (createError) {
+        console.error("[ambassador] auth account creation failed:", createError);
+        throw new Error("We could not create your account. Please try again.");
+      }
+    }
+    if (!userId) {
+      throw new Error(
+        "An account already uses this email. Contact NYRJ staff to enable ambassador access.",
+      );
+    }
+
+    const { error: saveError } = await supabaseAdmin.from("ambassador_accounts").upsert(
+      {
+        auth_user_id: userId,
+        name: data.name,
+        email,
+        active: true,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "email" },
+    );
+    if (saveError) {
+      console.error("[ambassador] account profile creation failed:", saveError);
+      throw new Error(
+        "Your login was created, but ambassador access could not be enabled. Contact NYRJ staff.",
+      );
+    }
+    return { ok: true as const, existingUser };
+  });
+
+/** Validates an individual ambassador session or the legacy shared password. */
 export const ambassadorLogin = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ password: z.string().min(1).max(500) }).parse(d))
+  .inputValidator((d: unknown) => z.object({ password: z.string().max(500).optional() }).parse(d))
   .handler(async ({ data }) => {
     await authorize({ password: data.password });
     return { ok: true as const };

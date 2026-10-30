@@ -10,6 +10,15 @@ export type Database = {
   };
   public: {
     Tables: {
+      ambassador_accounts: ServerTable<{
+        id: string;
+        auth_user_id: string;
+        name: string;
+        email: string;
+        active: boolean;
+        created_at: string;
+        updated_at: string;
+      }>;
       peer_notification_rollout: ServerTable<{ id: boolean; installed_at: string }>;
       peer_notification_outbox: ServerTable<{
         id: string;

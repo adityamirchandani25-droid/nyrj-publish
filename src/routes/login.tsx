@@ -19,7 +19,7 @@ import {
   type Session,
 } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
-import { loginAmbassador } from "@/lib/auth";
+import { loginAmbassador, signUpAmbassador } from "@/lib/auth";
 
 /**
  * Turns a raw sign-in failure into something a student can act on.
@@ -248,7 +248,7 @@ function LoginPage() {
               <p className="text-[10px] uppercase tracking-[0.25em] text-accent">Ambassador</p>
               <h3 className="font-serif text-2xl text-primary mt-2">Ambassador Login</h3>
               <p className="mt-2 text-sm text-muted-foreground">
-                For chapter leads registering clubs and reporting attendance.
+                Sign in or create an individual account with the ambassador access code.
               </p>
             </a>
           </div>
@@ -403,19 +403,41 @@ function DeveloperForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: (
 }
 
 function AmbassadorForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [accessCode, setAccessCode] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
-      const r = await loginAmbassador(name, password);
-      if (r.ok) onSuccess();
-      else setError(r.error);
+      if (mode === "signup") {
+        const created = await signUpAmbassador(name, email, password, accessCode);
+        if (!created.ok) {
+          setError(created.error);
+          return;
+        }
+        const signedIn = await loginAmbassador(email, password);
+        if (signedIn.ok) onSuccess();
+        else if (created.existingUser) {
+          setMode("login");
+          setPassword("");
+          setNotice(
+            "Ambassador access is enabled. Sign in with the password already used by this email address.",
+          );
+        } else setError(signedIn.error);
+      } else {
+        const r = await loginAmbassador(email, password);
+        if (r.ok) onSuccess();
+        else setError(r.error);
+      }
     } finally {
       setBusy(false);
     }
@@ -423,22 +445,64 @@ function AmbassadorForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
 
   return (
     <div className="mt-10 border border-border bg-card p-6 space-y-4 max-w-md">
-      <p className="text-[10px] uppercase tracking-[0.25em] text-accent">Ambassador Login</p>
+      <div className="flex gap-5 border-b border-border pb-4 text-xs uppercase tracking-[0.2em]">
+        <button
+          type="button"
+          onClick={() => {
+            setMode("login");
+            setError(null);
+            setNotice(null);
+          }}
+          className={mode === "login" ? "text-accent" : "text-muted-foreground"}
+        >
+          Log In
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMode("signup");
+            setError(null);
+            setNotice(null);
+          }}
+          className={mode === "signup" ? "text-accent" : "text-muted-foreground"}
+        >
+          Create Account
+        </button>
+      </div>
       <form onSubmit={submit} className="space-y-4">
-        <FieldRow label="Your Name" value={name} onChange={setName} placeholder="Jane Doe" />
+        {mode === "signup" && (
+          <FieldRow label="Full Name" value={name} onChange={setName} placeholder="Jane Doe" />
+        )}
         <FieldRow
-          label="Ambassador Password"
-          type="password"
-          value={password}
-          onChange={setPassword}
+          label="Email"
+          type="email"
+          value={email}
+          onChange={setEmail}
+          placeholder="you@example.com"
         />
+        <FieldRow label="Password" type="password" value={password} onChange={setPassword} />
+        {mode === "signup" && (
+          <FieldRow
+            label="Ambassador Access Code"
+            type="password"
+            value={accessCode}
+            onChange={setAccessCode}
+          />
+        )}
         {error && <p className="text-xs text-destructive">{error}</p>}
+        {notice && <p className="text-xs text-accent">{notice}</p>}
         <div className="flex items-center gap-4">
           <button
             disabled={busy}
             className="px-5 py-2.5 bg-primary text-primary-foreground text-xs uppercase tracking-[0.2em] hover:bg-accent transition disabled:opacity-50"
           >
-            {busy ? "Signing in…" : "Log In"}
+            {busy
+              ? mode === "signup"
+                ? "Creating…"
+                : "Signing in…"
+              : mode === "signup"
+                ? "Create Account"
+                : "Log In"}
           </button>
           <button
             type="button"
@@ -451,7 +515,8 @@ function AmbassadorForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
       </form>
 
       <p className="pt-4 border-t border-border text-xs text-muted-foreground">
-        Forgot the password? Email NYRJINFO@Gmail.com and the team will help you.
+        New ambassadors need the private access code from NYRJ staff. For password help, email
+        NYRJINFO@gmail.com.
       </p>
     </div>
   );

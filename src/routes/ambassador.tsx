@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
 import { ChapterEditor } from "@/components/ChapterEditor";
 import {
-  ambassadorPassword,
+  ambassadorCredentials,
   getSession,
   isAmbassador,
   logout,
@@ -88,7 +88,7 @@ function AmbassadorPage() {
             Fill in your chapter's details, including the chapter lead's email, a short description,
             and a photo of the chapter lead. Editing an existing chapter? Click the pencil below.
           </p>
-          <ChapterEditor getAuth={() => ({ password: ambassadorPassword() })} />
+          <ChapterEditor getAuth={ambassadorCredentials} />
         </div>
       </section>
     </SiteLayout>
@@ -147,7 +147,7 @@ function EventAttendancePanel() {
     setMsg(null);
     try {
       const n = Math.max(0, Math.floor(Number(draft) || 0));
-      const res = await setEventAttendance({ data: { password: ambassadorPassword(), value: n } });
+      const res = await setEventAttendance({ data: { ...ambassadorCredentials(), value: n } });
       setValue(res.value);
       setMsg("Saved.");
     } catch (err) {

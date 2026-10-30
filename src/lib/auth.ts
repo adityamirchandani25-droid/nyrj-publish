@@ -159,36 +159,58 @@ export function isAmbassador(s: Session | null): boolean {
 }
 
 // ---- Ambassadors (chapter leads) ----
-// The ambassador password is shared and intentionally memorable. The server
-// re-validates it on every mutation, so storing it in the session is fine.
 export async function loginAmbassador(
-  displayName: string,
+  email: string,
   password: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!displayName.trim()) return { ok: false, error: "Please enter your name." };
+  if (!email.trim()) return { ok: false, error: "Email is required." };
   if (!password.trim()) return { ok: false, error: "Password is required." };
   try {
-    // Read-only check; the server rejects (and throttles) a wrong password.
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+    if (error) throw error;
     const { ambassadorLogin } = await import("./ambassadors.functions");
-    await ambassadorLogin({ data: { password } });
+    await ambassadorLogin({ data: {} });
     writeSession({
       role: "ambassador",
-      username: displayName.trim(),
+      username:
+        (typeof data.user.user_metadata?.full_name === "string" &&
+          data.user.user_metadata.full_name.trim()) ||
+        data.user.email ||
+        email.trim().toLowerCase(),
       loggedInAt: Date.now(),
-      ambassadorPassword: password,
     });
     return { ok: true };
   } catch (err) {
+    await supabase.auth.signOut().catch(() => undefined);
     return { ok: false, error: loginErrorMessage(err, "Login failed.") };
   }
 }
 
-export function ambassadorPassword(): string {
+export async function signUpAmbassador(
+  name: string,
+  email: string,
+  password: string,
+  accessCode: string,
+): Promise<{ ok: true; existingUser: boolean } | { ok: false; error: string }> {
+  try {
+    const { createAmbassadorAccount } = await import("./ambassadors.functions");
+    const result = await createAmbassadorAccount({ data: { name, email, password, accessCode } });
+    return { ok: true, existingUser: result.existingUser };
+  } catch (err) {
+    return { ok: false, error: loginErrorMessage(err, "Account creation failed.") };
+  }
+}
+
+/** Legacy credentials are retained only for browser sessions created before individual accounts. */
+export function ambassadorCredentials(): { password?: string } {
   const s = getSession();
-  if (!s || s.role !== "ambassador" || !s.ambassadorPassword) {
+  if (!s || s.role !== "ambassador") {
     throw new Error("Your ambassador session has expired. Please sign in again.");
   }
-  return s.ambassadorPassword;
+  return s.ambassadorPassword ? { password: s.ambassadorPassword } : {};
 }
 
 // Used by editor-only server calls. Returns the signed token issued at login
@@ -267,7 +289,7 @@ export async function resendStudentConfirmation(email: string) {
 export async function logout() {
   const current = getSession();
   writeSession(null);
-  if (current?.role === "researcher") {
+  if (current?.role === "researcher" || current?.role === "ambassador") {
     try {
       await supabase.auth.signOut();
     } catch {
