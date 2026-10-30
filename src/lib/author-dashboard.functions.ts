@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { escapeLikePattern, sameEmail } from "./like-pattern";
 
 export type AuthorFeedback = {
   id: string;
@@ -44,15 +45,17 @@ export const getAuthorDashboard = createServerFn({ method: "GET" })
     const { data: papers, error } = await supabaseAdmin
       .from("manuscript_submissions")
       .select(
-        "id, title, status, decision, created_at, updated_at, current_version, resubmit_token, manuscript_path, manuscript_filename",
+        "id, title, submitter_email, status, decision, created_at, updated_at, current_version, resubmit_token, manuscript_path, manuscript_filename",
       )
-      .eq("submitter_email", email)
+      .ilike("submitter_email", escapeLikePattern(email))
       .is("deleted_at", null)
-      .order("updated_at", { ascending: false });
+      .order("updated_at", { ascending: false })
+      .limit(200);
     if (error) throw new Error("Your submissions could not be loaded. Please try again.");
-    if (!papers?.length) return [];
+    const ownedPapers = (papers ?? []).filter((paper) => sameEmail(paper.submitter_email, email));
+    if (!ownedPapers.length) return [];
 
-    const ids = papers.map((paper) => paper.id);
+    const ids = ownedPapers.map((paper) => paper.id);
     const [reviews, recommendations, versions] = await Promise.all([
       supabaseAdmin
         .from("review_assignments")
@@ -92,7 +95,7 @@ export const getAuthorDashboard = createServerFn({ method: "GET" })
 
     const currentFiles = new Map<string, string>();
     await Promise.all(
-      papers
+      ownedPapers
         .filter((paper) => paper.manuscript_path)
         .map(async (paper) => {
           const { data: signed, error: signError } = await supabaseAdmin.storage
@@ -105,7 +108,7 @@ export const getAuthorDashboard = createServerFn({ method: "GET" })
         }),
     );
 
-    return papers.map((paper) => {
+    return ownedPapers.map((paper) => {
       const feedback: AuthorFeedback[] = [
         ...(reviews.data ?? [])
           .filter(

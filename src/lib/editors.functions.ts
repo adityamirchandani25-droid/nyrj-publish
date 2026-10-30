@@ -612,7 +612,12 @@ export const getResubmitInfo = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ResubmitToken.parse(d))
   .handler(async ({ data }) => {
     const { enforceRateLimit } = await import("./rate-limit.server");
-    await enforceRateLimit({ scope: "revision-info", limit: 30, windowSeconds: 10 * 60 });
+    await enforceRateLimit({
+      scope: "revision-info",
+      limit: 30,
+      windowSeconds: 10 * 60,
+      identity: data.token,
+    });
     const row = await submissionForToken(data.token);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [review, editorial] = await Promise.all([
@@ -654,7 +659,12 @@ export const createRevisionUpload = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { enforceRateLimit } = await import("./rate-limit.server");
-    await enforceRateLimit({ scope: "revision-upload", limit: 10, windowSeconds: 60 * 60 });
+    await enforceRateLimit({
+      scope: "revision-upload",
+      limit: 20,
+      windowSeconds: 60 * 60,
+      identity: data.token,
+    });
     const row = await submissionForToken(data.token);
     requireManuscriptFilename(data.filename);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -678,22 +688,29 @@ export const finalizeRevision = createServerFn({ method: "POST" })
       path: z.string().trim().min(1).max(500),
       filename: z.string().trim().min(1).max(260),
       expectedVersion: z.number().int().min(1),
-      pdfPath: z.string().trim().min(1).max(500),
-      pdfFilename: z.string().trim().min(1).max(260),
+      alternatePath: z.string().trim().min(1).max(500).optional(),
+      alternateFilename: z.string().trim().min(1).max(260).optional(),
       note: z.string().trim().max(5000).optional().default(""),
     }).parse(d),
   )
   .handler(async ({ data }) => {
     const { enforceRateLimit } = await import("./rate-limit.server");
-    await enforceRateLimit({ scope: "revision-finalize", limit: 10, windowSeconds: 60 * 60 });
+    await enforceRateLimit({
+      scope: "revision-finalize",
+      limit: 10,
+      windowSeconds: 60 * 60,
+      identity: data.token,
+    });
     const row = await submissionForToken(data.token);
-    if (
-      !/\.(doc|docx)$/i.test(data.filename) ||
-      !/\.(doc|docx)$/i.test(data.path) ||
-      !/\.pdf$/i.test(data.pdfFilename) ||
-      !/\.pdf$/i.test(data.pdfPath)
-    )
-      throw new Error("Both a revised Word file and a PDF copy are required.");
+    requireManuscriptFilename(data.filename);
+    requireManuscriptFilename(data.path);
+    if (Boolean(data.alternatePath) !== Boolean(data.alternateFilename)) {
+      throw new Error("The optional alternate manuscript upload is incomplete.");
+    }
+    if (data.alternatePath && data.alternateFilename) {
+      requireManuscriptFilename(data.alternateFilename);
+      requireManuscriptFilename(data.alternatePath);
+    }
     if (row.current_version !== data.expectedVersion) {
       throw new Error("A newer revision was already received. Please refresh before trying again.");
     }
@@ -703,7 +720,7 @@ export const finalizeRevision = createServerFn({ method: "POST" })
     const nextVersion = data.expectedVersion + 1;
     const folder = `revisions/${row.id}`;
     const expectedPrefix = `${folder}/v${nextVersion}-`;
-    for (const path of [data.path, data.pdfPath]) {
+    for (const path of [data.path, data.alternatePath].filter(Boolean) as string[]) {
       if (!path.startsWith(expectedPrefix) || path.includes("..")) {
         throw new Error("That upload does not belong to this revision request.");
       }
@@ -767,11 +784,15 @@ export const finalizeRevision = createServerFn({ method: "POST" })
           ...(row.supplementary_paths ?? []).filter(
             (f) => f.description !== "Alternate format of the manuscript (Word/PDF)",
           ),
-          {
-            path: data.pdfPath,
-            filename: data.pdfFilename,
-            description: "Alternate format of the manuscript (Word/PDF)",
-          },
+          ...(data.alternatePath && data.alternateFilename
+            ? [
+                {
+                  path: data.alternatePath,
+                  filename: data.alternateFilename,
+                  description: "Alternate format of the manuscript (Word/PDF)",
+                },
+              ]
+            : []),
         ],
         current_version: nextVersion,
         status: "secondary review",
