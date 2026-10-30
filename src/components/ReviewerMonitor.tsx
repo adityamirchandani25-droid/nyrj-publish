@@ -6,6 +6,16 @@ import { resendReviewerInvitation } from "@/lib/peer-review.functions";
 type Rows = Awaited<ReturnType<typeof listReviewerMonitor>>;
 type Issues = Awaited<ReturnType<typeof listPeerNotificationIssues>>;
 
+const notificationStatus: Record<string, { label: string; className: string }> = {
+  delivered: { label: "Delivered", className: "text-green-700" },
+  provider_accepted: { label: "Accepted by SendGrid", className: "text-green-700" },
+  pending: { label: "Queued", className: "text-amber-700" },
+  processing: { label: "Sending", className: "text-amber-700" },
+  retrying: { label: "Retrying", className: "text-amber-700" },
+  failed: { label: "Failed", className: "text-red-700" },
+  cancelled: { label: "Cancelled", className: "text-muted-foreground" },
+};
+
 export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
   const [rows, setRows] = useState<Rows>([]);
   const [issues, setIssues] = useState<Issues>([]);
@@ -192,9 +202,21 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
                   </span>
                 </td>
                 <td className="p-2 text-xs">
-                  {r.lastNotification
-                    ? `${r.lastNotification.status} · ${new Date(r.lastNotification.at).toLocaleDateString()}`
-                    : "—"}
+                  {r.lastNotification ? (
+                    <span
+                      className={
+                        notificationStatus[r.lastNotification.status]?.className ??
+                        "text-muted-foreground"
+                      }
+                    >
+                      {notificationStatus[r.lastNotification.status]?.label ??
+                        r.lastNotification.status}
+                      <br />
+                      {new Date(r.lastNotification.at).toLocaleDateString()}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
                 </td>
               </tr>
             ))}
