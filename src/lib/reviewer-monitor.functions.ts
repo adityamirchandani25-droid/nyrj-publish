@@ -1,6 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+function missingOutboxSchema(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.includes("peer_notification_outbox") &&
+    error.message.includes("schema cache")
+  );
+}
+
 export const listReviewerMonitor = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ staffToken: z.string().min(1) }).parse(d))
   .handler(async ({ data }) => {
@@ -32,7 +40,13 @@ export const listReviewerMonitor = createServerFn({ method: "POST" })
           .select("assignment_id,recipient,status,created_at,provider_accepted_at,delivered_at")
           .order("id")
           .range(a, b),
-      ),
+      ).catch((error: unknown) => {
+        // A newly applied Supabase migration can take a moment to enter the
+        // PostgREST schema cache. Reviewer statistics should still load while
+        // notification history catches up.
+        if (missingOutboxSchema(error)) return [];
+        throw error;
+      }),
       allRows((a, b) =>
         db
           .from("manuscript_submissions")
@@ -145,6 +159,9 @@ export const listPeerNotificationIssues = createServerFn({ method: "POST" })
       .in("status", ["failed", "retrying", "processing"])
       .order("created_at", { ascending: false })
       .limit(50);
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (missingOutboxSchema(new Error(error.message))) return [];
+      throw new Error(error.message);
+    }
     return rows ?? [];
   });
