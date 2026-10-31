@@ -29,7 +29,7 @@ function Privacy() {
           Privacy Policy
         </h1>
         <p className="mt-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          Last Updated: October 12, 2026
+          Last Updated: October 31, 2026
         </p>
 
         <section className="mt-10 space-y-5 text-sm sm:text-base text-foreground/90 leading-relaxed">
@@ -68,6 +68,12 @@ function Privacy() {
             helps us identify technical issues, improve accessibility, and provide a better
             experience for our readers and authors. Whenever possible, this information is collected
             in an aggregated or anonymized form.
+          </p>
+
+          <p>
+            If you select “Accept all” in the cookie notice, we use Google Analytics to measure site
+            visits. Google may receive page and device information and set analytics cookies for
+            this purpose. Selecting “Necessary only” keeps Google Analytics off.
           </p>
 
           <p>

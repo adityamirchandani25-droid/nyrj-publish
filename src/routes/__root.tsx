@@ -17,6 +17,7 @@ import { CookieConsent } from "@/components/CookieConsent";
 import { EditorialLoader } from "@/components/EditorialLoader";
 
 const THEME_BOOTSTRAP = `(function(){try{var saved=localStorage.getItem('nyrj.theme');var dark=saved==='dark'||(!saved&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',dark);document.documentElement.style.colorScheme=dark?'dark':'light';}catch(_){}})();`;
+const GOOGLE_TAG_BOOTSTRAP = `(function(){var id='G-82KP5C4SDR';function load(){if(document.getElementById('nyrj-google-tag'))return;window.dataLayer=window.dataLayer||[];window.gtag=function(){window.dataLayer.push(arguments)};window.gtag('js',new Date());window.gtag('config',id);var script=document.createElement('script');script.id='nyrj-google-tag';script.async=true;script.src='https://www.googletagmanager.com/gtag/js?id='+encodeURIComponent(id);document.head.appendChild(script)}function allowed(){return document.cookie.split('; ').some(function(cookie){return cookie==='nyrj_cookie_consent=all'})}if(allowed())load();window.addEventListener('nyrj:cookie-consent',function(event){if(event.detail==='all')load()})})();`;
 
 function NotFoundComponent() {
   return (
@@ -222,6 +223,7 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
+        <script dangerouslySetInnerHTML={{ __html: GOOGLE_TAG_BOOTSTRAP }} />
         <HeadContent />
       </head>
       <body>
