@@ -400,7 +400,15 @@ function ReviewerLoginForm({
     setBusy(true);
     setError(null);
     try {
-      const s = await reviewerLogin({ data: { username, password } });
+      // Read from the form at submit time. Safari/password-manager autofill can
+      // update the visible field without reliably firing React's onChange.
+      const form = new FormData(e.currentTarget as HTMLFormElement);
+      const s = await reviewerLogin({
+        data: {
+          username: String(form.get("username") ?? username).trim(),
+          password: String(form.get("password") ?? password),
+        },
+      });
       window.localStorage.setItem(RSESSION, JSON.stringify(s));
       onLogin(s);
     } catch (err) {
@@ -413,14 +421,23 @@ function ReviewerLoginForm({
   return (
     <form onSubmit={submit} className="mt-6 border border-border bg-card p-6 space-y-4">
       <div>
-        <label className={label}>Username</label>
-        <input className={input} value={username} onChange={(e) => setUsername(e.target.value)} />
+        <label className={label}>Username or email</label>
+        <input
+          className={input}
+          name="username"
+          autoComplete="username"
+          autoCapitalize="none"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+        />
       </div>
       <div>
         <label className={label}>Password</label>
         <input
           className={input}
           type="password"
+          name="password"
+          autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />

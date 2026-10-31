@@ -703,7 +703,7 @@ export const registerReviewer = createServerFn({ method: "POST" })
 export const reviewerLogin = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
     z
-      .object({ username: z.string().trim().min(1).max(60), password: z.string().min(1).max(200) })
+      .object({ username: z.string().trim().min(1).max(255), password: z.string().min(1).max(200) })
       .parse(d),
   )
   .handler(async ({ data }) => {
@@ -711,10 +711,12 @@ export const reviewerLogin = createServerFn({ method: "POST" })
     await enforceRateLimit({ scope: "reviewer-login", limit: 8, windowSeconds: 10 * 60 });
     const { verifyPassword, issueReviewerToken } = await import("./peer-review.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // Reviewers often type their email instead of their username; accept either.
+    const login = data.username.trim().toLowerCase();
     const { data: row } = await supabaseAdmin
       .from("peer_reviewers")
       .select("id, name, email, password_hash, password_salt, status")
-      .eq("username", data.username.trim().toLowerCase())
+      .eq(login.includes("@") ? "email" : "username", login)
       .maybeSingle();
     const r = row as {
       id: string;
