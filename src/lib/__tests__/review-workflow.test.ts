@@ -36,8 +36,15 @@ describe("review submission availability", () => {
       }),
       null,
     );
+    assert.equal(
+      reviewSubmissionBlocker({
+        status: "waiting for edits",
+        decision: "pending",
+        deleted_at: null,
+      }),
+      null,
+    );
     for (const paper of [
-      { status: "waiting for edits", decision: "pending", deleted_at: null },
       { status: "submitted", decision: "declined", deleted_at: null },
       { status: "published", decision: "accepted", deleted_at: null },
       { status: "submitted", decision: "pending", deleted_at: "2026-10-01" },

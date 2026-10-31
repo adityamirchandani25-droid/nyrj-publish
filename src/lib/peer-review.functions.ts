@@ -266,7 +266,8 @@ export const resendReviewerInvitation = createServerFn({ method: "POST" })
       !sub ||
       s.deleted_at ||
       s.decision === "declined" ||
-      ["waiting for edits", "published"].includes(s.status ?? "")
+      s.status === "published" ||
+      (s.status === "waiting for edits" && !invitationStatuses.includes(r.status))
     ) {
       throw new Error("This manuscript is closed and the invitation cannot be resent.");
     }
@@ -922,6 +923,16 @@ export const respondToInvite = createServerFn({ method: "POST" })
     };
     requireAssignmentOwner(reviewer.email, row.reviewer_email);
     if (row.status !== "invited") throw new Error("You have already responded to this invitation.");
+    if (data.accept) {
+      const { data: paper, error: paperError } = await supabaseAdmin
+        .from("manuscript_submissions")
+        .select("status,decision,deleted_at")
+        .eq("id", row.submission_id)
+        .single();
+      if (paperError) throw new Error("Could not check the manuscript status. Please try again.");
+      const blocker = reviewSubmissionBlocker(paper);
+      if (blocker) throw new Error(blocker);
+    }
     const { data: updated, error: updateError } = await supabaseAdmin
       .from("review_assignments")
       .update({

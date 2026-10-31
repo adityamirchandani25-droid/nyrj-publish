@@ -1,6 +1,7 @@
 import { supabaseAdmin as db } from "@/integrations/supabase/client.server";
 import { DeliveryUncertainError, sendTemplateEmail } from "./email-templates/send-email";
 import { MASTER_STAFF_EMAILS } from "./staff-recipients";
+import { reviewSubmissionBlocker } from "./review-submission-availability";
 
 export type PeerNotification = {
   id: string;
@@ -89,6 +90,22 @@ export async function processPeerNotification(id: string) {
         .from("peer_notification_outbox")
         .update({ status: "cancelled", updated_at: new Date().toISOString() } as never)
         .eq("id", id);
+      return { status: "cancelled" as const };
+    }
+  }
+  if (row.submission_id && ["reviewer_invitation", "reviewer_reminder"].includes(row.event)) {
+    const { data: paper, error: paperError } = await db
+      .from("manuscript_submissions")
+      .select("status,decision,deleted_at")
+      .eq("id", row.submission_id)
+      .maybeSingle();
+    if (paperError) throw new Error(paperError.message);
+    if (reviewSubmissionBlocker(paper)) {
+      const { error: cancelError } = await db
+        .from("peer_notification_outbox")
+        .update({ status: "cancelled", updated_at: new Date().toISOString() } as never)
+        .eq("id", id);
+      if (cancelError) throw new Error(cancelError.message);
       return { status: "cancelled" as const };
     }
   }
@@ -306,12 +323,7 @@ export async function recoverRecentInvitations() {
       .eq("id", a.submission_id)
       .maybeSingle();
     if (paperError) throw new Error(paperError.message);
-    if (
-      !paper ||
-      paper.deleted_at ||
-      paper.decision === "declined" ||
-      ["published", "waiting for edits"].includes(paper.status)
-    )
+    if (!paper || paper.deleted_at || paper.decision === "declined" || paper.status === "published")
       continue;
     await queuePeerNotification({
       key: `reviewer-invite-${a.id}`,

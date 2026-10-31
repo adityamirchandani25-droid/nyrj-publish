@@ -244,7 +244,13 @@ function InvitePanel({ token, session }: { token: string; session: ReviewerSessi
         </p>
       </div>
 
-      {invite.status === "invited" && (
+      {invite.status === "invited" && invite.submissionBlocker && (
+        <p className="border border-border bg-card p-6 text-sm text-muted-foreground">
+          {invite.submissionBlocker}
+        </p>
+      )}
+
+      {invite.status === "invited" && !invite.submissionBlocker && (
         <div className="border border-border bg-card p-6">
           <p className="text-sm text-muted-foreground leading-relaxed">
             Thank you for considering this invitation. We deeply appreciate your time. If you
@@ -852,7 +858,10 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
               </a>
             )}
 
-            {r.status === "invited" && (
+            {r.status === "invited" && r.submissionBlocker && (
+              <p className="mt-4 text-sm text-muted-foreground">{r.submissionBlocker}</p>
+            )}
+            {r.status === "invited" && !r.submissionBlocker && (
               <div className="mt-4 flex gap-3">
                 <button className={btn} disabled={busy} onClick={() => act(r, true)}>
                   Accept
