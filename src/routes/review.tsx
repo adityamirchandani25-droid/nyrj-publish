@@ -190,6 +190,18 @@ function InvitePanel({ token, session }: { token: string; session: ReviewerSessi
       setDone("Thank you — your review has been sent to our editorial team.");
       await load();
     } catch (err) {
+      // A network timeout can arrive after the server committed the review.
+      try {
+        const latest = await getInvite({ data: { token, reviewerToken: session.token } });
+        if (latest.reviewSubmittedAt && latest.reviewSubmittedAt !== invite?.reviewSubmittedAt) {
+          setInvite(latest);
+          setFile(null);
+          setDone("Thank you — your review has been sent to our editorial team.");
+          return;
+        }
+      } catch {
+        // Keep the original submission error when the status check is unavailable.
+      }
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setBusy(false);
@@ -259,48 +271,56 @@ function InvitePanel({ token, session }: { token: string; session: ReviewerSessi
         </p>
       )}
 
-      {(invite.status === "accepted" || invite.status === "review_received") && (
-        <form onSubmit={send} className="border border-border bg-card p-6">
-          <p className={label}>Your review</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Upload an annotated paper, write comments, or do both. Provide at least one. Your review
-            is due by <strong>{due}</strong>.
+      {(invite.status === "accepted" || invite.status === "review_received") &&
+        invite.submissionBlocker && (
+          <p className="border border-border bg-card p-6 text-sm text-muted-foreground">
+            {invite.submissionBlocker}
           </p>
-          <textarea
-            className={`${input} min-h-[240px]`}
-            value={comments}
-            onChange={(e) => {
-              setTouched(true);
-              setComments(e.target.value);
-            }}
-            maxLength={20000}
-            placeholder="Direct comments (optional if you upload an annotated paper)…"
-          />
-          <label className="mt-4 block text-sm text-primary" htmlFor="invite-review-file">
-            Return an annotated copy if you like (Word or PDF)
-          </label>
-          <input
-            id="invite-review-file"
-            type="file"
-            accept=".pdf,.doc,.docx"
-            className={`${input} mt-1`}
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          />
-          <p className="mt-1 text-xs text-muted-foreground">
-            PDF or Word, up to 8 MB. Editors review the file and comments before sharing them.
-          </p>
-          {invite.reviewFileName && !file && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Previous round file: {invite.reviewFileName} (upload again to include in this round)
+        )}
+
+      {(invite.status === "accepted" || invite.status === "review_received") &&
+        !invite.submissionBlocker && (
+          <form onSubmit={send} className="border border-border bg-card p-6">
+            <p className={label}>Your review</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Upload an annotated paper, write comments, or do both. Provide at least one. Your
+              review is due by <strong>{due}</strong>.
             </p>
-          )}
-          {done && <p className="mt-3 text-sm text-accent">{done}</p>}
-          {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
-          <button className={`${btn} mt-4`} disabled={busy || (!comments.trim() && !file)}>
-            {invite.status === "review_received" ? "Resend review" : "Send review to editors"}
-          </button>
-        </form>
-      )}
+            <textarea
+              className={`${input} min-h-[240px]`}
+              value={comments}
+              onChange={(e) => {
+                setTouched(true);
+                setComments(e.target.value);
+              }}
+              maxLength={20000}
+              placeholder="Direct comments (optional if you upload an annotated paper)…"
+            />
+            <label className="mt-4 block text-sm text-primary" htmlFor="invite-review-file">
+              Return an annotated copy if you like (Word or PDF)
+            </label>
+            <input
+              id="invite-review-file"
+              type="file"
+              accept=".pdf,.doc,.docx"
+              className={`${input} mt-1`}
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              PDF or Word, up to 8 MB. Editors review the file and comments before sharing them.
+            </p>
+            {invite.reviewFileName && !file && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Previous round file: {invite.reviewFileName} (upload again to include in this round)
+              </p>
+            )}
+            {done && <p className="mt-3 text-sm text-accent">{done}</p>}
+            {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+            <button className={`${btn} mt-4`} disabled={busy || (!comments.trim() && !file)}>
+              {invite.status === "review_received" ? "Resend review" : "Send review to editors"}
+            </button>
+          </form>
+        )}
 
       <ReviewerFeedbackHistory token={token} reviewerToken={session.token} />
 
@@ -736,6 +756,7 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
   async function send(row: ReviewerAssignmentView) {
     setBusy(true);
     setNote(null);
+    setError(null);
     try {
       const uploaded = await uploadReviewFile(file, row.token, session.token);
       await submitReview({
@@ -746,6 +767,20 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
       setOpenId(null);
       await load();
     } catch (e) {
+      // A network timeout can arrive after the server committed the review.
+      try {
+        const latest = await listMyAssignments({ data: { reviewerToken: session.token } });
+        const updated = latest.find((item) => item.assignmentId === row.assignmentId);
+        if (updated?.reviewSubmittedAt && updated.reviewSubmittedAt !== row.reviewSubmittedAt) {
+          setRows(latest);
+          setFile(null);
+          setNote("Thank you — your review was sent to our editorial team.");
+          setOpenId(null);
+          return;
+        }
+      } catch {
+        // Keep the original submission error when the status check is unavailable.
+      }
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
       setBusy(false);
@@ -829,66 +864,70 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
             )}
 
             <ReviewerFeedbackHistory token={r.token} reviewerToken={session.token} />
-            {(r.status === "accepted" || r.status === "review_received") && (
-              <div className="mt-4">
-                {openId === r.assignmentId ? (
-                  <>
-                    <textarea
-                      className={`${input} min-h-[200px]`}
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      maxLength={20000}
-                    />
-                    <label
-                      className="mt-3 block text-sm text-primary"
-                      htmlFor={`review-file-${r.assignmentId}`}
-                    >
-                      Return an annotated copy if you like (Word or PDF)
-                    </label>
-                    <input
-                      id={`review-file-${r.assignmentId}`}
-                      type="file"
-                      accept=".pdf,.doc,.docx"
-                      className={input}
-                      onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                    />
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      PDF or Word, up to 8 MB. Editors approve comments and files before sharing
-                      them.
-                    </p>
-                    {r.reviewFileName && !file && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Previous round file: {r.reviewFileName} (upload again to include in this
-                        round)
-                      </p>
-                    )}
-                    <div className="mt-3 flex gap-3">
-                      <button
-                        className={btn}
-                        disabled={busy || (!draft.trim() && !file)}
-                        onClick={() => send(r)}
-                      >
-                        Send review
-                      </button>
-                      <button className={btnGhost} onClick={() => setOpenId(null)}>
-                        Cancel
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <button
-                    className={btn}
-                    onClick={() => {
-                      setDraft(r.comments || "");
-                      setFile(null);
-                      setOpenId(r.assignmentId);
-                    }}
-                  >
-                    {r.status === "review_received" ? "Edit review" : "Write review"}
-                  </button>
-                )}
-              </div>
+            {(r.status === "accepted" || r.status === "review_received") && r.submissionBlocker && (
+              <p className="mt-4 text-sm text-muted-foreground">{r.submissionBlocker}</p>
             )}
+            {(r.status === "accepted" || r.status === "review_received") &&
+              !r.submissionBlocker && (
+                <div className="mt-4">
+                  {openId === r.assignmentId ? (
+                    <>
+                      <textarea
+                        className={`${input} min-h-[200px]`}
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        maxLength={20000}
+                      />
+                      <label
+                        className="mt-3 block text-sm text-primary"
+                        htmlFor={`review-file-${r.assignmentId}`}
+                      >
+                        Return an annotated copy if you like (Word or PDF)
+                      </label>
+                      <input
+                        id={`review-file-${r.assignmentId}`}
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        className={input}
+                        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                      />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        PDF or Word, up to 8 MB. Editors approve comments and files before sharing
+                        them.
+                      </p>
+                      {r.reviewFileName && !file && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Previous round file: {r.reviewFileName} (upload again to include in this
+                          round)
+                        </p>
+                      )}
+                      <div className="mt-3 flex gap-3">
+                        <button
+                          className={btn}
+                          disabled={busy || (!draft.trim() && !file)}
+                          onClick={() => send(r)}
+                        >
+                          Send review
+                        </button>
+                        <button className={btnGhost} onClick={() => setOpenId(null)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <button
+                      className={btn}
+                      onClick={() => {
+                        setDraft(r.comments || "");
+                        setFile(null);
+                        setOpenId(r.assignmentId);
+                      }}
+                    >
+                      {r.status === "review_received" ? "Edit review" : "Write review"}
+                    </button>
+                  )}
+                </div>
+              )}
           </div>
         ))}
       </div>

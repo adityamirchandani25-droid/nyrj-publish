@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, test } from "node:test";
 import { reviewFeedbackSchema } from "../review-feedback.ts";
 import { reviewStatus } from "../review-workflow.ts";
+import { reviewSubmissionBlocker } from "../review-submission-availability.ts";
 import { checkStaffPassword, issueStaffToken, verifyStaffToken } from "../staff-auth.server.ts";
 
 describe("review feedback inputs", () => {
@@ -24,6 +25,25 @@ describe("review feedback inputs", () => {
   });
   test("limits comments to 20,000 characters", () =>
     assert.equal(reviewFeedbackSchema.safeParse({ comments: "x".repeat(20001) }).success, false));
+});
+describe("review submission availability", () => {
+  test("accepts active manuscripts and identifies closed assignments", () => {
+    assert.equal(
+      reviewSubmissionBlocker({
+        status: "secondary review",
+        decision: "accepted",
+        deleted_at: null,
+      }),
+      null,
+    );
+    for (const paper of [
+      { status: "waiting for edits", decision: "pending", deleted_at: null },
+      { status: "submitted", decision: "declined", deleted_at: null },
+      { status: "published", decision: "accepted", deleted_at: null },
+      { status: "submitted", decision: "pending", deleted_at: "2026-10-01" },
+    ])
+      assert.ok(reviewSubmissionBlocker(paper));
+  });
 });
 describe("historical paper status", () => {
   test("final and trashed papers are completed", () => {

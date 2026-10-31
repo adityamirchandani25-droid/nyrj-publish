@@ -1,5 +1,6 @@
 import type { ReviewerSubmission } from "./reviewer-submission";
 import { reviewFeedbackSchema } from "./review-feedback";
+import { reviewSubmissionBlocker } from "./review-submission-availability";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { MASTER_STAFF_EMAILS } from "./staff-recipients";
@@ -812,6 +813,8 @@ export type InviteView = {
   dueAt: string;
   comments: string;
   reviewFileName: string | null;
+  reviewSubmittedAt: string | null;
+  submissionBlocker: string | null;
   manuscriptFilename: string;
   manuscriptUrl: string | null;
 };
@@ -822,7 +825,7 @@ async function loadInviteByToken(token: string, reviewerToken: string): Promise<
   const { data: a } = await supabaseAdmin
     .from("review_assignments")
     .select(
-      "id, submission_id, reviewer_email, reviewer_name, status, due_at, review_comments, review_file_name",
+      "id, submission_id, reviewer_email, reviewer_name, status, due_at, review_comments, review_file_name, review_submitted_at",
     )
     .eq("invite_token", token)
     .maybeSingle();
@@ -836,11 +839,14 @@ async function loadInviteByToken(token: string, reviewerToken: string): Promise<
     due_at: string;
     review_comments: string;
     review_file_name: string | null;
+    review_submitted_at: string | null;
   };
   requireAssignmentOwner(reviewer.email, row.reviewer_email);
   const { data: sub } = await supabaseAdmin
     .from("manuscript_submissions")
-    .select("title, abstract, keywords, research_domain, manuscript_path, manuscript_filename")
+    .select(
+      "title, abstract, keywords, research_domain, manuscript_path, manuscript_filename, status, decision, deleted_at",
+    )
     .eq("id", row.submission_id)
     .single();
   const s = (sub ?? {}) as {
@@ -850,6 +856,9 @@ async function loadInviteByToken(token: string, reviewerToken: string): Promise<
     research_domain?: string;
     manuscript_path?: string;
     manuscript_filename?: string;
+    status?: string;
+    decision?: string;
+    deleted_at?: string | null;
   };
   const canReadManuscript = ["accepted", "review_received", "sent_to_author"].includes(row.status);
   const { signedReviewerManuscript } = await import("./reviewer-resources.server");
@@ -866,6 +875,12 @@ async function loadInviteByToken(token: string, reviewerToken: string): Promise<
     dueAt: row.due_at,
     comments: row.review_comments,
     reviewFileName: row.review_file_name,
+    reviewSubmittedAt: row.review_submitted_at,
+    submissionBlocker: reviewSubmissionBlocker(
+      sub
+        ? { status: s.status ?? "", decision: s.decision ?? "", deleted_at: s.deleted_at ?? null }
+        : null,
+    ),
     manuscriptFilename: s.manuscript_filename ?? "manuscript.pdf",
     manuscriptUrl: canReadManuscript
       ? await signedReviewerManuscript(s.manuscript_path, s.manuscript_filename)
@@ -968,7 +983,7 @@ export const createReviewUpload = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: assignment } = await supabaseAdmin
       .from("review_assignments")
-      .select("id, reviewer_email, status")
+      .select("id, submission_id, reviewer_email, status")
       .eq("invite_token", data.token)
       .maybeSingle();
     if (!assignment) throw new Error("This review link is not valid.");
@@ -976,6 +991,14 @@ export const createReviewUpload = createServerFn({ method: "POST" })
     if (!["accepted", "review_received"].includes(assignment.status)) {
       throw new Error("This review is no longer open for uploads.");
     }
+    const { data: paper, error: paperError } = await supabaseAdmin
+      .from("manuscript_submissions")
+      .select("status,decision,deleted_at")
+      .eq("id", assignment.submission_id)
+      .single();
+    if (paperError) throw new Error("Could not check the manuscript status. Please try again.");
+    const blocker = reviewSubmissionBlocker(paper);
+    if (blocker) throw new Error(blocker);
     const path = `review-feedback/${assignment.id}/${crypto.randomUUID()}.${extension}`;
     const { data: signed, error } = await supabaseAdmin.storage
       .from("submissions")
@@ -1014,15 +1037,10 @@ export const submitReview = createServerFn({ method: "POST" })
       .select("status,decision,deleted_at")
       .eq("id", row.submission_id)
       .single();
-    if (
-      paperStateError ||
-      !paperState ||
-      paperState.deleted_at ||
-      paperState.decision === "declined" ||
-      ["published", "waiting for edits"].includes(paperState.status)
-    ) {
-      throw new Error("This paper is not currently open for reviewer feedback.");
-    }
+    if (paperStateError)
+      throw new Error("Could not check the manuscript status. Please try again.");
+    const blocker = reviewSubmissionBlocker(paperState);
+    if (blocker) throw new Error(blocker);
     let reviewFile: { review_file_path: string; review_file_name: string } | null = null;
     if (data.filePath || data.fileName) {
       const extension = data.fileName?.split(".").pop()?.toLowerCase() ?? "";
@@ -1059,7 +1077,15 @@ export const submitReview = createServerFn({ method: "POST" })
       .in("status", ["accepted", "review_received"])
       .select("id")
       .maybeSingle();
-    if (updateError || !updated) throw new Error("Could not save your review. Please try again.");
+    if (updateError || !updated) {
+      console.error("[server] peer review save failed", {
+        assignmentId: row.id,
+        error: updateError,
+      });
+      throw new Error(
+        "Could not save your review. Please try again. If it continues, contact the editorial team.",
+      );
+    }
 
     const { data: sub } = await supabaseAdmin
       .from("manuscript_submissions")
@@ -1079,12 +1105,16 @@ export const submitReview = createServerFn({ method: "POST" })
       );
     } catch (e) {
       console.error("[server] review notification failed:", e);
-      await audit(
-        row.submission_id,
-        row.reviewer_email,
-        "Review submitted",
-        "Staff notification pending retry",
-      );
+      try {
+        await audit(
+          row.submission_id,
+          row.reviewer_email,
+          "Review submitted",
+          "Staff notification pending retry",
+        );
+      } catch (auditError) {
+        console.error("[server] review notification audit failed:", auditError);
+      }
     }
 
     try {
@@ -1115,7 +1145,7 @@ export const listMyAssignments = createServerFn({ method: "POST" })
     const { data: rows } = await supabaseAdmin
       .from("review_assignments")
       .select(
-        "id, submission_id, invite_token, reviewer_name, status, due_at, review_comments, review_file_name",
+        "id, submission_id, invite_token, reviewer_name, status, due_at, review_comments, review_file_name, review_submitted_at",
       )
       .eq("reviewer_email", reviewer.email)
       .order("assigned_at", { ascending: false })
@@ -1130,13 +1160,14 @@ export const listMyAssignments = createServerFn({ method: "POST" })
       due_at: string;
       review_comments: string;
       review_file_name: string | null;
+      review_submitted_at: string | null;
     }>;
     if (list.length === 0) return [];
 
     const { data: subs } = await supabaseAdmin
       .from("manuscript_submissions")
       .select(
-        "id, title, abstract, keywords, research_domain, manuscript_path, manuscript_filename",
+        "id, title, abstract, keywords, research_domain, manuscript_path, manuscript_filename, status, decision, deleted_at",
       )
       .in(
         "id",
@@ -1152,6 +1183,9 @@ export const listMyAssignments = createServerFn({ method: "POST" })
           research_domain: string;
           manuscript_path: string | null;
           manuscript_filename: string | null;
+          status: string;
+          decision: string;
+          deleted_at: string | null;
         }>
       ).map((s) => [s.id, s]),
     );
@@ -1178,6 +1212,8 @@ export const listMyAssignments = createServerFn({ method: "POST" })
           dueAt: x.due_at,
           comments: x.review_comments,
           reviewFileName: x.review_file_name,
+          reviewSubmittedAt: x.review_submitted_at,
+          submissionBlocker: reviewSubmissionBlocker(s ?? null),
           manuscriptFilename: s?.manuscript_filename ?? "manuscript.pdf",
           manuscriptUrl: canReadManuscript
             ? await signedReviewerManuscript(s?.manuscript_path, s?.manuscript_filename)
