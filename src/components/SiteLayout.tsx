@@ -13,6 +13,10 @@ import {
 } from "@/components/SocialLinks";
 import { ScrollRevealRegion } from "@/components/ScrollRevealRegion";
 
+// Module state survives client-side route changes and resets on a full page refresh.
+let logoClickCount = 0;
+let prahulRevealed = false;
+
 export function SiteLayout({ children }: { children?: ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
@@ -25,6 +29,7 @@ export function SiteLayout({ children }: { children?: ReactNode }) {
 
 function Header() {
   const [session, setSession] = useState<Session | null>(null);
+  const [showPrahul, setShowPrahul] = useState(() => prahulRevealed);
   const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState("");
 
@@ -90,16 +95,35 @@ function Header() {
       <div className="mx-auto max-w-6xl px-6 py-10 grid grid-cols-[auto_1fr_auto] items-center gap-6">
         <Link
           to="/"
-          aria-label="NYRJ home"
+          aria-label={showPrahul ? "Prahul — home" : "NYRJ home"}
           className="journal-logo-shell shrink-0 justify-self-start"
+          onClick={(event) => {
+            if (prahulRevealed) return;
+            logoClickCount += 1;
+            if (logoClickCount === 5) {
+              event.preventDefault();
+              prahulRevealed = true;
+              setShowPrahul(true);
+            }
+          }}
         >
-          <img
-            src="/nyrj-logo.png"
-            alt="National Youth Research Journal logo"
-            className="journal-mark h-16 sm:h-20 w-auto"
-            width={320}
-            height={320}
-          />
+          {showPrahul ? (
+            <img
+              src="/prahul.jpg"
+              alt="Prahul"
+              className="h-16 w-16 sm:h-20 sm:w-20 rounded-full object-cover object-top"
+              width={320}
+              height={320}
+            />
+          ) : (
+            <img
+              src="/nyrj-logo.png"
+              alt="National Youth Research Journal logo"
+              className="journal-mark h-16 sm:h-20 w-auto"
+              width={320}
+              height={320}
+            />
+          )}
         </Link>
         <Link to="/" className="flex flex-col items-center text-center gap-2 min-w-0">
           <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.35em] text-accent">
