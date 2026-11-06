@@ -156,6 +156,7 @@ function Header() {
             label="For Students"
             items={session ? STUDENT_ITEMS : STUDENT_ITEMS.filter((i) => i.to !== "/track")}
           />
+          <DropdownMenu label="For Reviewers" items={REVIEWER_ITEMS} />
           <NavItem to="/events">Events</NavItem>
           <NavItem to="/contact">Contact</NavItem>
           {session?.role === "staff" && (
@@ -230,6 +231,11 @@ const STUDENT_ITEMS = [
   { to: "/editors", label: "Editing Process" },
   { to: "/guidance", label: "Guidance" },
   { to: "/chapters", label: "Chapters" },
+];
+
+const REVIEWER_ITEMS = [
+  { to: "/review", label: "Peer Review Portal" },
+  { to: "/initial-reviewer", label: "Initial Reviewer Desk" },
 ];
 
 function DropdownMenu({ label, items }: { label: string; items: { to: string; label: string }[] }) {
