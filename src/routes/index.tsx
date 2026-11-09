@@ -66,7 +66,7 @@ function Home() {
     <SiteLayout>
       {/* Mission hero */}
       <section className="winter-hero border-b border-border">
-        <div className="winter-hero__content mx-auto max-w-4xl px-6 py-20 sm:py-24 text-center">
+        <div className="winter-hero__content mx-auto max-w-4xl px-4 py-14 text-center sm:px-6 sm:py-24">
           <p className="winter-hero__season mb-5">✦ &nbsp; A season for discovery &nbsp; ✦</p>
           <p className="text-[10px] uppercase tracking-[0.35em] text-accent mb-4">
             Open Access · Peer-Reviewed · Vol. I · ISSN 3143-3030
@@ -84,16 +84,16 @@ function Home() {
             social sciences, and economics. Our mission is to give young scholars real experience
             conducting research and publishing it before they ever set foot on a college campus.
           </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
             <Link
               to="/submit"
-              className="px-5 py-2.5 bg-accent text-accent-foreground text-xs uppercase tracking-[0.2em] hover:opacity-90 transition"
+              className="px-5 py-3 bg-accent text-accent-foreground text-xs uppercase tracking-[0.2em] hover:opacity-90 transition"
             >
               Submit a Manuscript
             </Link>
             <Link
               to="/archive"
-              className="px-5 py-2.5 border border-primary text-primary text-xs uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition"
+              className="px-5 py-3 border border-primary text-primary text-xs uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition"
             >
               Read the Library
             </Link>
@@ -104,7 +104,7 @@ function Home() {
       {/* Featured Papers */}
       {featured.length > 0 && (
         <section className="border-b border-border bg-secondary">
-          <div className="mx-auto max-w-6xl px-6 py-16">
+          <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
             <div className="text-center">
               <p className="text-[10px] uppercase tracking-[0.3em] text-accent">In This Issue</p>
               <h2 className="font-serif text-3xl sm:text-4xl text-primary mt-2">Featured Papers</h2>
@@ -145,7 +145,7 @@ function Home() {
       )}
 
       {/* Inaugural Issue callout */}
-      <section className="mx-auto max-w-4xl px-6 py-16 text-center">
+      <section className="mx-auto max-w-4xl px-4 py-12 text-center sm:px-6 sm:py-16">
         <p className="text-[10px] uppercase tracking-[0.3em] text-accent">In This Issue</p>
         <h2 className="font-serif text-3xl sm:text-4xl text-primary mt-2">Rolling Publication</h2>
         <p className="mt-4 text-muted-foreground max-w-2xl mx-auto">
@@ -170,7 +170,7 @@ function Home() {
 
       {/* Three pillars */}
       <section className="bg-secondary border-y border-border">
-        <div className="mx-auto max-w-6xl px-6 py-16 grid gap-10 md:grid-cols-3 text-center">
+        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 text-center sm:px-6 sm:py-16 md:grid-cols-3">
           <Pillar
             n="01"
             title="Every Discipline"
@@ -190,7 +190,7 @@ function Home() {
       </section>
 
       {/* CTA */}
-      <section className="mx-auto max-w-3xl px-6 py-20 text-center">
+      <section className="mx-auto max-w-3xl px-4 py-14 text-center sm:px-6 sm:py-20">
         <h2 className="font-serif text-3xl sm:text-4xl text-primary">Have research to share?</h2>
         <p className="mt-4 text-muted-foreground">
           Submissions are open year-round. Send your manuscript, supplemental files, and a short
@@ -206,7 +206,7 @@ function Home() {
 
       {/* Join the Editorial Team */}
       <section className="border-t border-border bg-secondary">
-        <div className="mx-auto max-w-3xl px-6 py-16 text-center">
+        <div className="mx-auto max-w-3xl px-4 py-12 text-center sm:px-6 sm:py-16">
           <p className="text-[10px] uppercase tracking-[0.3em] text-accent">
             Editorial Opportunities
           </p>

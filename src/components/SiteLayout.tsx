@@ -1,5 +1,5 @@
 import { Link, Outlet, useNavigate } from "@tanstack/react-router";
-import { Moon, Snowflake, Sun } from "lucide-react";
+import { Menu, Moon, Snowflake, Sun, X } from "lucide-react";
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { getSession, logout, onAuthChange, type Session } from "@/lib/auth";
 import {
@@ -35,6 +35,7 @@ function Header() {
   const [showAlternatePortrait, setShowAlternatePortrait] = useState(() => alternatePortraitShown);
   const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     setSession(getSession());
@@ -51,11 +52,11 @@ function Header() {
   return (
     <header className="winter-header border-b border-border bg-background">
       <div className="border-b border-border/60">
-        <div className="mx-auto max-w-6xl px-6 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground flex justify-end items-center gap-4">
-          <div className="flex items-center gap-4 sm:gap-6">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground flex justify-end items-center gap-4">
+          <div className="flex w-full sm:w-auto items-center justify-between gap-2 sm:gap-6">
             <span className="hidden md:inline">ISSN 3143-3030</span>
             <ThemeToggle />
-            <form onSubmit={handleSearch} className="flex items-center" role="search">
+            <form onSubmit={handleSearch} className="flex min-w-0 items-center" role="search">
               <label htmlFor="site-search" className="sr-only">
                 Search NYRJ
               </label>
@@ -65,7 +66,7 @@ function Header() {
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Search…"
-                className="w-24 sm:w-48 border border-border bg-background px-2 py-1 text-[11px] normal-case tracking-normal focus:outline-none focus:border-accent"
+                className="w-24 min-w-0 sm:w-48 border border-border bg-background px-2 py-1 text-[11px] normal-case tracking-normal focus:outline-none focus:border-accent"
               />
               <button
                 type="submit"
@@ -76,11 +77,11 @@ function Header() {
               </button>
             </form>
             {session ? (
-              <span className="flex items-center gap-3">
-                <span className="text-accent normal-case tracking-normal">
+              <span className="flex min-w-0 items-center gap-2 sm:gap-3">
+                <span className="max-w-20 truncate text-accent normal-case tracking-normal sm:max-w-none">
                   {session.username} <span className="text-muted-foreground">({session.role})</span>
                 </span>
-                <button onClick={() => logout()} className="hover:text-accent transition">
+                <button onClick={() => logout()} className="shrink-0 hover:text-accent transition">
                   Log out
                 </button>
               </span>
@@ -95,7 +96,7 @@ function Header() {
           </div>
         </div>
       </div>
-      <div className="mx-auto max-w-6xl px-6 py-10 grid grid-cols-[auto_1fr_auto] items-center gap-6">
+      <div className="mx-auto grid max-w-6xl grid-cols-[auto_1fr] items-center gap-x-4 gap-y-4 px-4 py-6 sm:px-6 md:grid-cols-[auto_1fr_auto] md:gap-6 md:py-10">
         <Link
           to="/"
           aria-label={
@@ -139,7 +140,10 @@ function Header() {
             />
           )}
         </Link>
-        <Link to="/" className="flex flex-col items-center text-center gap-2 min-w-0">
+        <Link
+          to="/"
+          className="order-3 col-span-2 flex min-w-0 flex-col items-center gap-2 text-center md:order-none md:col-span-1"
+        >
           <span className="winter-season-label">
             <Snowflake size={12} aria-hidden="true" /> Winter at NYRJ{" "}
             <Snowflake size={12} aria-hidden="true" />
@@ -153,20 +157,20 @@ function Header() {
           >
             NYRJ
           </p>
-          <p className="text-xs sm:text-sm text-muted-foreground italic max-w-xl">
+          <p className="max-w-xl text-xs italic text-muted-foreground sm:text-sm">
             From middle school to med school — student research, every discipline, published on a
             rolling basis.
           </p>
         </Link>
         <Link
           to="/submit/apply"
-          className="justify-self-end px-4 sm:px-6 py-2.5 rounded-full bg-accent text-accent-foreground text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.2em] hover:opacity-90 transition whitespace-nowrap"
+          className="justify-self-end whitespace-nowrap rounded-full bg-accent px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-accent-foreground transition hover:opacity-90 sm:px-6 sm:text-[11px] md:order-none"
         >
           Submit <span className="hidden sm:inline">Manuscript</span> →
         </Link>
       </div>
       <nav className="journal-nav border-t border-border bg-primary text-primary-foreground">
-        <div className="mx-auto max-w-6xl px-6 flex flex-wrap justify-center items-center gap-x-8 gap-y-2 py-3 text-xs uppercase tracking-[0.18em]">
+        <div className="mx-auto hidden max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-2 px-6 py-3 text-xs uppercase tracking-[0.18em] md:flex">
           <NavItem to="/">Home</NavItem>
           <DropdownMenu label="About" items={ABOUT_ITEMS} />
           <NavItem to="/archive">Library</NavItem>
@@ -187,6 +191,80 @@ function Header() {
             <NavItem to="/ambassador">Ambassador · Dashboard</NavItem>
           )}
           {session?.role === "developer" && <NavItem to="/tools">Developer · Tools</NavItem>}
+        </div>
+        <div className="md:hidden">
+          <button
+            type="button"
+            className="flex min-h-12 w-full items-center justify-between px-5 text-xs font-semibold uppercase tracking-[0.2em]"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+            aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-site-navigation"
+          >
+            <span className="flex items-center gap-2">
+              <Menu size={17} aria-hidden="true" /> Menu
+            </span>
+            {mobileMenuOpen ? (
+              <X size={19} aria-hidden="true" />
+            ) : (
+              <span aria-hidden="true">Explore ↓</span>
+            )}
+          </button>
+          {mobileMenuOpen && (
+            <div id="mobile-site-navigation" className="border-t border-white/15 px-4 pb-4">
+              <MobileNavLink to="/" onNavigate={() => setMobileMenuOpen(false)}>
+                Home
+              </MobileNavLink>
+              <MobileNavGroup
+                label="About"
+                items={ABOUT_ITEMS}
+                onNavigate={() => setMobileMenuOpen(false)}
+              />
+              <MobileNavLink to="/archive" onNavigate={() => setMobileMenuOpen(false)}>
+                Library
+              </MobileNavLink>
+              <MobileNavGroup
+                label="For Students"
+                items={
+                  session ? STUDENT_ITEMS : STUDENT_ITEMS.filter((item) => item.to !== "/track")
+                }
+                onNavigate={() => setMobileMenuOpen(false)}
+              />
+              <MobileNavGroup
+                label="For Reviewers"
+                items={REVIEWER_ITEMS}
+                onNavigate={() => setMobileMenuOpen(false)}
+              />
+              <MobileNavLink to="/events" onNavigate={() => setMobileMenuOpen(false)}>
+                Events
+              </MobileNavLink>
+              <MobileNavLink to="/contact" onNavigate={() => setMobileMenuOpen(false)}>
+                Contact
+              </MobileNavLink>
+              {session?.role === "staff" && (
+                <>
+                  <MobileNavLink
+                    to="/admin/submissions"
+                    onNavigate={() => setMobileMenuOpen(false)}
+                  >
+                    Staff · Submissions
+                  </MobileNavLink>
+                  <MobileNavLink to="/admin/chapters" onNavigate={() => setMobileMenuOpen(false)}>
+                    Staff · Chapters
+                  </MobileNavLink>
+                </>
+              )}
+              {session?.role === "ambassador" && (
+                <MobileNavLink to="/ambassador" onNavigate={() => setMobileMenuOpen(false)}>
+                  Ambassador · Dashboard
+                </MobileNavLink>
+              )}
+              {session?.role === "developer" && (
+                <MobileNavLink to="/tools" onNavigate={() => setMobileMenuOpen(false)}>
+                  Developer · Tools
+                </MobileNavLink>
+              )}
+            </div>
+          )}
         </div>
       </nav>
     </header>
@@ -232,6 +310,57 @@ function NavItem({ to, children }: { to: string; children: ReactNode }) {
     >
       {children}
     </Link>
+  );
+}
+
+function MobileNavLink({
+  to,
+  children,
+  onNavigate,
+}: {
+  to: string;
+  children: ReactNode;
+  onNavigate: () => void;
+}) {
+  return (
+    <Link
+      to={to}
+      onClick={onNavigate}
+      className="flex min-h-11 items-center border-b border-white/15 px-2 py-2 text-xs uppercase tracking-[0.14em] hover:text-accent"
+    >
+      {children}
+    </Link>
+  );
+}
+
+function MobileNavGroup({
+  label,
+  items,
+  onNavigate,
+}: {
+  label: string;
+  items: { to: string; label: string }[];
+  onNavigate: () => void;
+}) {
+  return (
+    <details className="border-b border-white/15">
+      <summary className="flex min-h-11 cursor-pointer items-center justify-between px-2 py-2 text-xs uppercase tracking-[0.14em]">
+        {label}
+        <span aria-hidden="true">⌄</span>
+      </summary>
+      <div className="pb-2 pl-3">
+        {items.map((item) => (
+          <Link
+            key={item.to}
+            to={item.to}
+            onClick={onNavigate}
+            className="flex min-h-11 items-center border-l border-white/20 px-4 py-2 text-xs tracking-wide text-primary-foreground/85 hover:text-accent"
+          >
+            {item.label}
+          </Link>
+        ))}
+      </div>
+    </details>
   );
 }
 
