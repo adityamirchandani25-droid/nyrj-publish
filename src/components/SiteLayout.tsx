@@ -1,5 +1,5 @@
 import { Link, Outlet, useNavigate } from "@tanstack/react-router";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Snowflake, Sun } from "lucide-react";
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { getSession, logout, onAuthChange, type Session } from "@/lib/auth";
 import {
@@ -16,10 +16,12 @@ import { ScrollRevealRegion } from "@/components/ScrollRevealRegion";
 // Module state survives client-side route changes and resets on a full page refresh.
 let logoClickCount = 0;
 let prahulRevealed = false;
+let alternatePortraitShown = false;
 
 export function SiteLayout({ children }: { children?: ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
+    <div className="winter-site min-h-screen flex flex-col bg-background text-foreground">
+      <div className="winter-snow" aria-hidden="true" />
       <Header />
       <ScrollRevealRegion>{children ?? <Outlet />}</ScrollRevealRegion>
       <Footer />
@@ -30,6 +32,7 @@ export function SiteLayout({ children }: { children?: ReactNode }) {
 function Header() {
   const [session, setSession] = useState<Session | null>(null);
   const [showPrahul, setShowPrahul] = useState(() => prahulRevealed);
+  const [showAlternatePortrait, setShowAlternatePortrait] = useState(() => alternatePortraitShown);
   const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState("");
 
@@ -46,7 +49,7 @@ function Header() {
   }
 
   return (
-    <header className="border-b border-border bg-background">
+    <header className="winter-header border-b border-border bg-background">
       <div className="border-b border-border/60">
         <div className="mx-auto max-w-6xl px-6 py-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground flex justify-end items-center gap-4">
           <div className="flex items-center gap-4 sm:gap-6">
@@ -95,10 +98,21 @@ function Header() {
       <div className="mx-auto max-w-6xl px-6 py-10 grid grid-cols-[auto_1fr_auto] items-center gap-6">
         <Link
           to="/"
-          aria-label={showPrahul ? "Prahul — home" : "NYRJ home"}
+          aria-label={
+            showPrahul
+              ? showAlternatePortrait
+                ? "Alternate portrait — show Prahul"
+                : "Prahul — show alternate portrait"
+              : "NYRJ home"
+          }
           className="journal-logo-shell shrink-0 justify-self-start"
           onClick={(event) => {
-            if (prahulRevealed) return;
+            if (prahulRevealed) {
+              event.preventDefault();
+              alternatePortraitShown = !alternatePortraitShown;
+              setShowAlternatePortrait(alternatePortraitShown);
+              return;
+            }
             logoClickCount += 1;
             if (logoClickCount === 5) {
               event.preventDefault();
@@ -109,8 +123,8 @@ function Header() {
         >
           {showPrahul ? (
             <img
-              src="/prahul.jpg"
-              alt="Prahul"
+              src={showAlternatePortrait ? "/other-person.jpg" : "/prahul.jpg"}
+              alt={showAlternatePortrait ? "Alternate portrait" : "Prahul"}
               className="h-16 w-16 sm:h-20 sm:w-20 rounded-full object-cover object-top"
               width={320}
               height={320}
@@ -126,6 +140,10 @@ function Header() {
           )}
         </Link>
         <Link to="/" className="flex flex-col items-center text-center gap-2 min-w-0">
+          <span className="winter-season-label">
+            <Snowflake size={12} aria-hidden="true" /> Winter at NYRJ{" "}
+            <Snowflake size={12} aria-hidden="true" />
+          </span>
           <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.35em] text-accent">
             National Youth Research Journal
           </p>

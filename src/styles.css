@@ -38,60 +38,59 @@
 
 :root {
   --radius: 0.25rem;
-  /* Cream paper + deep academic navy + scholarly gold */
-  --paper: oklch(0.975 0.012 85);
-  --ink: oklch(0.18 0.04 260);
-  --gold: oklch(0.62 0.13 70);
+  /* Winter: frost white, midnight navy, and glacial blue. */
+  --paper: oklch(0.975 0.013 230);
+  --ink: oklch(0.19 0.055 250);
+  --gold: oklch(0.48 0.11 215);
 
-  --background: oklch(0.975 0.012 85);
-  --foreground: oklch(0.18 0.04 260);
-  --card: oklch(0.99 0.008 85);
-  --card-foreground: oklch(0.18 0.04 260);
-  --popover: oklch(0.99 0.008 85);
-  --popover-foreground: oklch(0.18 0.04 260);
-  --primary: oklch(0.22 0.06 260);
-  --primary-foreground: oklch(0.975 0.012 85);
-  --secondary: oklch(0.93 0.015 85);
-  --secondary-foreground: oklch(0.22 0.06 260);
-  --muted: oklch(0.93 0.015 85);
-  --muted-foreground: oklch(0.45 0.03 260);
-  --accent: oklch(0.62 0.13 70);
-  --accent-foreground: oklch(0.99 0.008 85);
+  --background: oklch(0.975 0.013 230);
+  --foreground: oklch(0.19 0.055 250);
+  --card: oklch(0.995 0.006 230);
+  --card-foreground: oklch(0.19 0.055 250);
+  --popover: oklch(0.995 0.006 230);
+  --popover-foreground: oklch(0.19 0.055 250);
+  --primary: oklch(0.23 0.07 250);
+  --primary-foreground: oklch(0.98 0.012 230);
+  --secondary: oklch(0.93 0.025 230);
+  --secondary-foreground: oklch(0.23 0.07 250);
+  --muted: oklch(0.93 0.025 230);
+  --muted-foreground: oklch(0.43 0.035 250);
+  --accent: oklch(0.48 0.11 215);
+  --accent-foreground: oklch(0.99 0.005 230);
   --destructive: oklch(0.55 0.22 27);
   --destructive-foreground: oklch(0.99 0.008 85);
-  --border: oklch(0.85 0.02 85);
-  --input: oklch(0.85 0.02 85);
-  --ring: oklch(0.62 0.13 70);
+  --border: oklch(0.84 0.025 230);
+  --input: oklch(0.84 0.025 230);
+  --ring: oklch(0.48 0.11 215);
 }
 
 .dark {
-  --paper: oklch(0.16 0.025 260);
-  --ink: oklch(0.93 0.018 85);
-  --gold: oklch(0.74 0.13 75);
+  --paper: oklch(0.16 0.035 250);
+  --ink: oklch(0.94 0.015 230);
+  --gold: oklch(0.76 0.095 210);
 
-  --background: oklch(0.145 0.028 260);
-  --foreground: oklch(0.93 0.018 85);
-  --card: oklch(0.19 0.03 260);
-  --card-foreground: oklch(0.93 0.018 85);
-  --popover: oklch(0.18 0.03 260);
-  --popover-foreground: oklch(0.93 0.018 85);
-  --primary: oklch(0.23 0.05 260);
-  --primary-foreground: oklch(0.96 0.014 85);
-  --secondary: oklch(0.235 0.03 260);
-  --secondary-foreground: oklch(0.93 0.018 85);
-  --muted: oklch(0.22 0.025 260);
-  --muted-foreground: oklch(0.72 0.025 85);
-  --accent: oklch(0.7 0.13 75);
-  --accent-foreground: oklch(0.12 0.025 260);
+  --background: oklch(0.145 0.035 250);
+  --foreground: oklch(0.94 0.015 230);
+  --card: oklch(0.19 0.035 250);
+  --card-foreground: oklch(0.94 0.015 230);
+  --popover: oklch(0.18 0.035 250);
+  --popover-foreground: oklch(0.94 0.015 230);
+  --primary: oklch(0.23 0.06 250);
+  --primary-foreground: oklch(0.97 0.015 230);
+  --secondary: oklch(0.235 0.04 250);
+  --secondary-foreground: oklch(0.94 0.015 230);
+  --muted: oklch(0.22 0.035 250);
+  --muted-foreground: oklch(0.74 0.025 230);
+  --accent: oklch(0.76 0.095 210);
+  --accent-foreground: oklch(0.15 0.035 250);
   --destructive: oklch(0.65 0.2 27);
-  --destructive-foreground: oklch(0.98 0.01 85);
-  --border: oklch(0.32 0.025 260);
-  --input: oklch(0.32 0.025 260);
-  --ring: oklch(0.7 0.13 75);
+  --destructive-foreground: oklch(0.98 0.01 230);
+  --border: oklch(0.32 0.035 250);
+  --input: oklch(0.32 0.035 250);
+  --ring: oklch(0.76 0.095 210);
 }
 
-/* In the light palette, primary navy is used for both surfaces and text.
-   Dark mode keeps navy surfaces but promotes primary text to warm paper. */
+/* Dark mode keeps navy surfaces but promotes primary text to frost white. */
 .dark .text-primary {
   color: var(--foreground);
 }
@@ -126,6 +125,145 @@
     font-family: var(--font-serif);
     letter-spacing: -0.01em;
   }
+}
+
+/* Winter atmosphere ------------------------------------------------------- */
+.winter-site {
+  isolation: isolate;
+}
+
+.winter-header {
+  position: relative;
+  background-image:
+    radial-gradient(ellipse at 8% 0%, oklch(0.8 0.08 215 / 0.3), transparent 45%),
+    radial-gradient(ellipse at 92% 10%, oklch(0.86 0.05 235 / 0.35), transparent 42%),
+    linear-gradient(180deg, var(--card), var(--background));
+}
+
+.dark .winter-header {
+  background-image:
+    radial-gradient(ellipse at 8% 0%, oklch(0.52 0.11 210 / 0.17), transparent 46%),
+    radial-gradient(ellipse at 92% 10%, oklch(0.4 0.1 265 / 0.2), transparent 42%),
+    linear-gradient(180deg, var(--card), var(--background));
+}
+
+.winter-season-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--accent);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+}
+
+.winter-snow {
+  position: fixed;
+  inset: -100vh 0 0;
+  z-index: 40;
+  overflow: hidden;
+  pointer-events: none;
+  color: oklch(0.47 0.06 235 / 0.32);
+}
+
+.dark .winter-snow {
+  color: oklch(0.96 0.02 230 / 0.42);
+}
+
+.winter-snow::before,
+.winter-snow::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background-repeat: repeat;
+  animation: winter-fall 22s linear infinite;
+}
+
+.winter-snow::before {
+  background-image:
+    radial-gradient(2px 2px at 12px 26px, currentColor 98%, transparent),
+    radial-gradient(3px 3px at 92px 155px, currentColor 98%, transparent),
+    radial-gradient(2px 2px at 173px 71px, currentColor 98%, transparent),
+    radial-gradient(3px 3px at 246px 190px, currentColor 98%, transparent);
+  background-size: 280px 240px;
+}
+
+.winter-snow::after {
+  opacity: 0.6;
+  background-image:
+    radial-gradient(2px 2px at 55px 112px, currentColor 98%, transparent),
+    radial-gradient(2px 2px at 152px 23px, currentColor 98%, transparent),
+    radial-gradient(3px 3px at 220px 182px, currentColor 98%, transparent);
+  background-size: 310px 270px;
+  animation-duration: 34s;
+  animation-direction: reverse;
+}
+
+@keyframes winter-fall {
+  from { transform: translate3d(0, -240px, 0); }
+  to { transform: translate3d(34px, 0, 0); }
+}
+
+.winter-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 15% 15%, oklch(0.54 0.16 210 / 0.38), transparent 42%),
+    radial-gradient(ellipse at 86% 5%, oklch(0.45 0.14 275 / 0.36), transparent 38%),
+    radial-gradient(ellipse at 55% 110%, oklch(0.56 0.11 220 / 0.22), transparent 52%),
+    oklch(0.2 0.07 250);
+  box-shadow: inset 0 1px oklch(1 0 0 / 0.14), inset 0 -1px oklch(1 0 0 / 0.14);
+}
+
+.winter-hero::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    radial-gradient(2px 2px at 35px 45px, white 98%, transparent),
+    radial-gradient(3px 3px at 170px 120px, white 98%, transparent),
+    radial-gradient(2px 2px at 250px 30px, white 98%, transparent);
+  background-size: 290px 220px;
+  animation: winter-fall 25s linear infinite;
+}
+
+.winter-hero__content {
+  position: relative;
+}
+
+.winter-hero__season {
+  color: oklch(0.83 0.08 210);
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  font-style: italic;
+  letter-spacing: 0.04em;
+}
+
+.winter-hero .text-primary,
+.winter-hero .text-muted-foreground {
+  color: oklch(0.96 0.018 230);
+}
+
+.winter-hero .text-accent {
+  color: oklch(0.81 0.09 210);
+}
+
+.winter-hero .border-primary {
+  border-color: oklch(0.82 0.04 220);
+}
+
+.winter-hero .border-primary:hover {
+  color: var(--primary);
+  background: oklch(0.96 0.018 230);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .winter-snow::before,
+  .winter-snow::after,
+  .winter-hero::before { animation: none; }
 }
 
 /* Theme switch ------------------------------------------------------------ */

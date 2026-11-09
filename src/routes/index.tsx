@@ -65,8 +65,9 @@ function Home() {
   return (
     <SiteLayout>
       {/* Mission hero */}
-      <section className="border-b border-border">
-        <div className="mx-auto max-w-4xl px-6 py-16 text-center">
+      <section className="winter-hero border-b border-border">
+        <div className="winter-hero__content mx-auto max-w-4xl px-6 py-20 sm:py-24 text-center">
+          <p className="winter-hero__season mb-5">✦ &nbsp; A season for discovery &nbsp; ✦</p>
           <p className="text-[10px] uppercase tracking-[0.35em] text-accent mb-4">
             Open Access · Peer-Reviewed · Vol. I · ISSN 3143-3030
           </p>
