@@ -196,14 +196,16 @@ export async function processPeerNotification(id: string) {
       await db
         .from("peer_notification_outbox")
         .update({
-          last_error: `${message} — reconcile with SendGrid before retrying`,
+          last_error: `${message} — reconcile with the email provider before retrying`,
           updated_at: new Date().toISOString(),
         } as never)
         .eq("id", id)
         .eq("status", "processing");
       return { status: "uncertain" as const, error: message };
     }
-    const retryable = !/^SendGrid 4\d\d:/.test(message) || /^SendGrid (408|429):/.test(message);
+    const retryable =
+      !/^(SendGrid|Mailtrap) 4\d\d:/.test(message) ||
+      /^(SendGrid|Mailtrap) (408|429):/.test(message);
     const next = new Date(
       Date.now() + Math.min(24 * 60, 2 ** Math.min(row.attempts, 10)) * 60_000,
     ).toISOString();
@@ -244,9 +246,12 @@ export async function processDuePeerNotifications(limit = 100) {
   );
   const results = [];
   for (const row of due) {
-    // A definite SendGrid quota rejection is safe to retry when credits are
+    // A definite provider quota rejection is safe to retry after capacity is
     // restored. Other terminal 4xx failures need staff correction first.
-    if (row.status === "failed" && !/Maximum credits exceeded/i.test(row.last_error ?? ""))
+    if (
+      row.status === "failed" &&
+      !/Maximum credits exceeded|Monthly messages limit reached/i.test(row.last_error ?? "")
+    )
       continue;
     if (results.length >= limit) break;
     try {

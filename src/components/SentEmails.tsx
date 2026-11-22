@@ -91,8 +91,8 @@ export function SentEmails() {
   return (
     <div className="mt-8 space-y-6">
       <p className="text-sm text-muted-foreground">
-        “Accepted by SendGrid” means the provider accepted the request. Inbox delivery and bounces
-        cannot be confirmed from this archive until SendGrid event access is connected.
+        “Accepted by provider” means the provider accepted the request. Inbox delivery and bounces
+        cannot be confirmed from this archive until provider event access is connected.
       </p>
       {(rows ?? []).some(
         (row) => row.status === "failed" && /Maximum credits exceeded/i.test(row.error ?? ""),
@@ -101,8 +101,8 @@ export function SentEmails() {
           role="alert"
           className="border border-destructive bg-destructive/10 p-3 text-sm text-destructive"
         >
-          SendGrid has rejected recent mail because the account has no remaining credits. Restore
-          sending in SendGrid before retrying any failed workflow messages.
+          Historical SendGrid messages were rejected when that account ran out of credits. Check the
+          active provider and its sending capacity before retrying failed workflow messages.
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2">
@@ -183,7 +183,7 @@ export function SentEmails() {
               <div className="mt-1 text-[11px] text-muted-foreground">
                 To {r.to_email} · {r.template}
                 {r.status === "sent" ? (
-                  <span> · Accepted by SendGrid</span>
+                  <span> · Accepted by provider</span>
                 ) : (
                   <span className="text-destructive"> · {r.status}</span>
                 )}

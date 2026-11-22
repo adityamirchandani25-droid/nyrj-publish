@@ -2,10 +2,9 @@ import * as React from "react";
 import { render } from "@react-email/render";
 import { TEMPLATES } from "./registry";
 
-// Server-only: reads SENDGRID_API_KEY. Never import from client components.
+// Server-only: reads provider credentials. Never import from client components.
 
 const SITE_NAME = "National Youth Research Journal";
-// Domain authenticated in SendGrid.
 const FROM_DOMAIN = "nyrj.org";
 const FROM_ADDRESS = `noreply@${FROM_DOMAIN}`;
 const SENDGRID_ENDPOINT = "https://api.sendgrid.com/v3/mail/send";
@@ -16,7 +15,7 @@ const SEND_TIMEOUT_MS = 8_000;
 const RETRY_DELAYS_MS = [300];
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
-/** The request may have reached SendGrid; reconcile before another attempt. */
+/** The request may have reached the provider; reconcile before another attempt. */
 export class DeliveryUncertainError extends Error {}
 
 export type SendTemplateEmailResult =
@@ -25,7 +24,7 @@ export type SendTemplateEmailResult =
 
 export interface SendTemplateEmailOptions {
   templateData?: Record<string, unknown>;
-  /** Correlates the logical send in SendGrid event metadata. */
+  /** Correlates the logical send in provider event metadata. */
   idempotencyKey?: string;
   replyTo?: string;
   /** Base64-encoded file attachments (keep total under ~20 MB). */
@@ -42,8 +41,7 @@ export interface RenderedEmail {
 }
 
 /**
- * Renders a registered template and sends it through SendGrid's Web API.
- * Sending is owned by the project's own SendGrid account.
+ * Renders a registered template and sends it through the configured provider.
  */
 export async function sendTemplateEmail(
   templateName: string,
@@ -140,7 +138,7 @@ export async function sendTemplateEmail(
 
   let providerMessageId: string | null = null;
   try {
-    providerMessageId = await deliverViaSendGrid(body);
+    providerMessageId = await deliverEmail(body);
   } catch (error) {
     const detail = errorMessage(error);
     await logSentEmail({
@@ -231,7 +229,17 @@ export async function resendRenderedEmail(email: RenderedEmail): Promise<void> {
     ],
   };
   if (replyTo) body["reply_to"] = { email: replyTo };
-  await deliverViaSendGrid(body);
+  await deliverEmail(body);
+}
+
+async function deliverEmail(body: Record<string, unknown>): Promise<string | null> {
+  const provider = process.env["EMAIL_PROVIDER"]?.trim().toLowerCase() || "sendgrid";
+  if (provider === "mailtrap") {
+    const { deliverViaMailtrap } = await import("./mailtrap-delivery.server");
+    return deliverViaMailtrap(body);
+  }
+  if (provider === "sendgrid") return deliverViaSendGrid(body);
+  throw new Error(`Unsupported EMAIL_PROVIDER: ${provider}`);
 }
 
 async function deliverViaSendGrid(body: Record<string, unknown>): Promise<string | null> {

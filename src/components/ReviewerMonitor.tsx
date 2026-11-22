@@ -8,7 +8,7 @@ type Issues = Awaited<ReturnType<typeof listPeerNotificationIssues>>;
 
 const notificationStatus: Record<string, { label: string; className: string }> = {
   delivered: { label: "Delivered", className: "text-green-700" },
-  provider_accepted: { label: "Accepted by SendGrid", className: "text-amber-700" },
+  provider_accepted: { label: "Accepted by provider", className: "text-amber-700" },
   pending: { label: "Queued", className: "text-amber-700" },
   processing: { label: "Sending", className: "text-amber-700" },
   retrying: { label: "Retrying", className: "text-amber-700" },
@@ -80,9 +80,9 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
       });
       setMessage(
         result.status === "provider_accepted"
-          ? "SendGrid accepted the reminder. Inbox delivery is not yet confirmed."
+          ? "The email provider accepted the reminder. Inbox delivery is not yet confirmed."
           : result.status === "uncertain"
-            ? "Provider response is unknown. Reconcile this notification with SendGrid before retrying."
+            ? "Provider response is unknown. Reconcile this notification with the email provider before retrying."
             : "Reminder queued for processing.",
       );
       setRows(await listReviewerMonitor({ data: { staffToken: staffToken() } }));
@@ -97,7 +97,7 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
       <h2 className="font-serif text-2xl text-primary">Reviewer monitoring</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Current manuscript rounds · returned feedback and author notifications are tracked
-        separately. SendGrid acceptance does not confirm inbox delivery; bounce data is unavailable
+        separately. Provider acceptance does not confirm inbox delivery; bounce data is unavailable
         until provider events are connected.
       </p>
       <div className="my-4 flex gap-3">
