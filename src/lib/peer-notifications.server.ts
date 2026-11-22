@@ -59,73 +59,65 @@ export async function processPeerNotification(id: string) {
   const row = (data as PeerNotification[] | null)?.[0];
   if (!row) return { status: "already_processed" as const };
 
-  // A completed or closed review must never receive an old invitation.
-  if (
-    row.assignment_id &&
-    ["reviewer_invitation", "reviewer_revision", "reviewer_reminder"].includes(row.event)
-  ) {
-    const { data: assignment, error: lookupError } = await db
-      .from("review_assignments")
-      .select("status,responded_at,review_submitted_at")
-      .eq("id", row.assignment_id)
-      .maybeSingle();
-    if (lookupError) throw new Error(lookupError.message);
-    const obsoleteInvitation =
-      row.event === "reviewer_invitation" &&
-      (!assignment ||
-        assignment.status !== "invited" ||
-        assignment.responded_at ||
-        assignment.review_submitted_at);
-    const inactiveRevision =
-      row.event === "reviewer_revision" &&
-      (!assignment ||
-        !["invited", "accepted", "review_received", "sent_to_author"].includes(assignment.status));
-    const obsoleteReminder =
-      row.event === "reviewer_reminder" &&
-      (!assignment ||
-        !["invited", "accepted"].includes(assignment.status) ||
-        assignment.review_submitted_at);
-    if (obsoleteInvitation || inactiveRevision || obsoleteReminder) {
-      await db
-        .from("peer_notification_outbox")
-        .update({ status: "cancelled", updated_at: new Date().toISOString() } as never)
-        .eq("id", id);
-      return { status: "cancelled" as const };
-    }
-  }
-  if (row.submission_id && ["reviewer_invitation", "reviewer_reminder"].includes(row.event)) {
-    const { data: paper, error: paperError } = await db
-      .from("manuscript_submissions")
-      .select("status,decision,deleted_at")
-      .eq("id", row.submission_id)
-      .maybeSingle();
-    if (paperError) throw new Error(paperError.message);
-    if (reviewSubmissionBlocker(paper)) {
-      const { error: cancelError } = await db
-        .from("peer_notification_outbox")
-        .update({ status: "cancelled", updated_at: new Date().toISOString() } as never)
-        .eq("id", id);
-      if (cancelError) throw new Error(cancelError.message);
-      return { status: "cancelled" as const };
-    }
-  }
-  if (row.event === "reviewer_revision" && row.submission_id) {
-    const { data: paper, error: paperError } = await db
-      .from("manuscript_submissions")
-      .select("current_version,deleted_at")
-      .eq("id", row.submission_id)
-      .maybeSingle();
-    if (paperError) throw new Error(paperError.message);
-    if (!paper || paper.deleted_at || paper.current_version !== row.manuscript_version) {
-      await db
-        .from("peer_notification_outbox")
-        .update({ status: "cancelled", updated_at: new Date().toISOString() } as never)
-        .eq("id", id);
-      return { status: "cancelled" as const };
-    }
-  }
-
   try {
+    // A completed or closed review must never receive an old invitation.
+    if (
+      row.assignment_id &&
+      ["reviewer_invitation", "reviewer_revision", "reviewer_reminder"].includes(row.event)
+    ) {
+      const { data: assignment, error: lookupError } = await db
+        .from("review_assignments")
+        .select("status,responded_at,review_submitted_at")
+        .eq("id", row.assignment_id)
+        .maybeSingle();
+      if (lookupError) throw new Error(lookupError.message);
+      const obsoleteInvitation =
+        row.event === "reviewer_invitation" &&
+        (!assignment ||
+          assignment.status !== "invited" ||
+          assignment.responded_at ||
+          assignment.review_submitted_at);
+      const inactiveRevision =
+        row.event === "reviewer_revision" &&
+        (!assignment ||
+          !["invited", "accepted", "review_received", "sent_to_author"].includes(
+            assignment.status,
+          ));
+      const obsoleteReminder =
+        row.event === "reviewer_reminder" &&
+        (!assignment ||
+          !["invited", "accepted"].includes(assignment.status) ||
+          assignment.review_submitted_at);
+      if (obsoleteInvitation || inactiveRevision || obsoleteReminder) {
+        await cancelPeerNotification(id);
+        return { status: "cancelled" as const };
+      }
+    }
+    if (row.submission_id && ["reviewer_invitation", "reviewer_reminder"].includes(row.event)) {
+      const { data: paper, error: paperError } = await db
+        .from("manuscript_submissions")
+        .select("status,decision,deleted_at")
+        .eq("id", row.submission_id)
+        .maybeSingle();
+      if (paperError) throw new Error(paperError.message);
+      if (reviewSubmissionBlocker(paper)) {
+        await cancelPeerNotification(id);
+        return { status: "cancelled" as const };
+      }
+    }
+    if (row.event === "reviewer_revision" && row.submission_id) {
+      const { data: paper, error: paperError } = await db
+        .from("manuscript_submissions")
+        .select("current_version,deleted_at")
+        .eq("id", row.submission_id)
+        .maybeSingle();
+      if (paperError) throw new Error(paperError.message);
+      if (!paper || paper.deleted_at || paper.current_version !== row.manuscript_version) {
+        await cancelPeerNotification(id);
+        return { status: "cancelled" as const };
+      }
+    }
+
     const result = await sendTemplateEmail(row.template, row.recipient, {
       idempotencyKey: row.idempotency_key,
       templateData: row.template_data,
@@ -181,6 +173,15 @@ export async function processPeerNotification(id: string) {
   }
 }
 
+async function cancelPeerNotification(id: string) {
+  const { error } = await db
+    .from("peer_notification_outbox")
+    .update({ status: "cancelled", updated_at: new Date().toISOString() } as never)
+    .eq("id", id)
+    .eq("status", "processing");
+  if (error) throw new Error(`Could not cancel notification: ${error.message}`);
+}
+
 export async function processDuePeerNotifications(limit = 100) {
   const { data, error } = await db
     .from("peer_notification_outbox")
@@ -191,7 +192,16 @@ export async function processDuePeerNotifications(limit = 100) {
     .limit(limit);
   if (error) throw new Error(error.message);
   const results = [];
-  for (const row of data ?? []) results.push(await processPeerNotification(row.id));
+  for (const row of data ?? []) {
+    try {
+      results.push(await processPeerNotification(row.id));
+    } catch (cause) {
+      // One malformed or temporarily unavailable job must not starve every
+      // later reviewer invitation in the daily batch.
+      console.error("[peer-notifications] job failed:", row.id, cause);
+      results.push({ status: "error" as const, id: row.id });
+    }
+  }
   return results;
 }
 
@@ -300,50 +310,68 @@ export async function queueRevisionNotifications(submissionId: string, version: 
 /** Repair assignments created after outbox rollout if enqueue was interrupted. */
 export async function recoverRecentInvitations() {
   const rolloutAt = await notificationRolloutAt();
-  const { data: assignments, error } = await db
-    .from("review_assignments")
-    .select("id,submission_id,reviewer_email,reviewer_name,invite_token,due_at,status,assigned_at")
-    .gte("assigned_at", rolloutAt)
-    .eq("status", "invited")
-    .order("assigned_at", { ascending: false })
-    .limit(100);
-  if (error) throw new Error(error.message);
   let recovered = 0;
-  for (const a of assignments ?? []) {
-    const { data: existing, error: lookupError } = await db
-      .from("peer_notification_outbox")
-      .select("id")
-      .eq("idempotency_key", `reviewer-invite-${a.id}`)
-      .maybeSingle();
-    if (lookupError) throw new Error(lookupError.message);
-    if (existing) continue;
-    const { data: paper, error: paperError } = await db
-      .from("manuscript_submissions")
-      .select("title,keywords,research_domain,status,decision,deleted_at")
-      .eq("id", a.submission_id)
-      .maybeSingle();
-    if (paperError) throw new Error(paperError.message);
-    if (!paper || paper.deleted_at || paper.decision === "declined" || paper.status === "published")
-      continue;
-    await queuePeerNotification({
-      key: `reviewer-invite-${a.id}`,
-      submissionId: a.submission_id,
-      assignmentId: a.id,
-      event: "reviewer_invitation",
-      template: "reviewer-invitation",
-      recipient: a.reviewer_email,
-      replyTo: "NYRJINFO@gmail.com",
-      data: {
-        reviewerName: a.reviewer_name || "Reviewer",
-        assignmentId: a.id,
-        title: paper.title,
-        researchDomain: paper.research_domain,
-        keywords: paper.keywords,
-        dueDate: new Date(a.due_at).toLocaleDateString("en-US"),
-        inviteUrl: `https://nyrj.org/review?token=${a.invite_token}`,
-      },
-    });
-    recovered++;
+  const failures: string[] = [];
+  for (let offset = 0; ; offset += 100) {
+    const { data: assignments, error } = await db
+      .from("review_assignments")
+      .select(
+        "id,submission_id,reviewer_email,reviewer_name,invite_token,due_at,status,assigned_at",
+      )
+      .gte("assigned_at", rolloutAt)
+      .eq("status", "invited")
+      .order("assigned_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + 99);
+    if (error) throw new Error(error.message);
+    for (const a of assignments ?? []) {
+      try {
+        const { data: existing, error: lookupError } = await db
+          .from("peer_notification_outbox")
+          .select("id")
+          .eq("idempotency_key", `reviewer-invite-${a.id}`)
+          .maybeSingle();
+        if (lookupError) throw new Error(lookupError.message);
+        if (existing) continue;
+        const { data: paper, error: paperError } = await db
+          .from("manuscript_submissions")
+          .select("title,keywords,research_domain,status,decision,deleted_at")
+          .eq("id", a.submission_id)
+          .maybeSingle();
+        if (paperError) throw new Error(paperError.message);
+        if (
+          !paper ||
+          paper.deleted_at ||
+          paper.decision === "declined" ||
+          paper.status === "published"
+        )
+          continue;
+        await queuePeerNotification({
+          key: `reviewer-invite-${a.id}`,
+          submissionId: a.submission_id,
+          assignmentId: a.id,
+          event: "reviewer_invitation",
+          template: "reviewer-invitation",
+          recipient: a.reviewer_email,
+          replyTo: "NYRJINFO@gmail.com",
+          data: {
+            reviewerName: a.reviewer_name || "Reviewer",
+            assignmentId: a.id,
+            title: paper.title,
+            researchDomain: paper.research_domain,
+            keywords: paper.keywords,
+            dueDate: new Date(a.due_at).toLocaleDateString("en-US"),
+            inviteUrl: `https://nyrj.org/review?token=${a.invite_token}`,
+          },
+        });
+        recovered++;
+      } catch (cause) {
+        console.error("[peer-notifications] invitation recovery failed:", a.id, cause);
+        failures.push(a.id);
+      }
+    }
+    if ((assignments?.length ?? 0) < 100) break;
   }
+  if (failures.length) throw new Error(`${failures.length} invitation(s) could not be recovered`);
   return recovered;
 }
