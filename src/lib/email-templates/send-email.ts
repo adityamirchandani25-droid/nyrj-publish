@@ -148,7 +148,7 @@ export async function sendTemplateEmail(
       html,
       text_body: text,
       reply_to: replyTo,
-      status: "failed",
+      status: error instanceof DeliveryUncertainError ? "retrying" : "failed",
       error: detail.slice(0, 500),
     });
     throw error;
@@ -234,9 +234,9 @@ export async function resendRenderedEmail(email: RenderedEmail): Promise<void> {
 
 async function deliverEmail(body: Record<string, unknown>): Promise<string | null> {
   const provider = process.env["EMAIL_PROVIDER"]?.trim().toLowerCase() || "sendgrid";
-  if (provider === "mailtrap") {
-    const { deliverViaMailtrap } = await import("./mailtrap-delivery.server");
-    return deliverViaMailtrap(body);
+  if (provider === "brevo") {
+    const { deliverViaBrevo } = await import("./brevo-delivery.server");
+    return deliverViaBrevo(body);
   }
   if (provider === "sendgrid") return deliverViaSendGrid(body);
   throw new Error(`Unsupported EMAIL_PROVIDER: ${provider}`);
