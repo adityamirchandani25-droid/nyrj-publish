@@ -169,8 +169,18 @@ export async function runReviewReminders(): Promise<{
   const fmt = (iso: string) =>
     new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
-  const reminderColumns =
-    "id, submission_id, reviewer_email, reviewer_name, status, assigned_at, due_at, responded_at, invite_token, review_submitted_at, invite_reminder_sent_at, review_reminder_sent_at, followup_staff_notified_at, no_response_notified_at, no_response_followup_sent_at";
+  // One production database is missing this optional migration column. Keep
+  // deadline processing alive and use the existing follow-up timestamp as the
+  // alert marker there until the migration is applied.
+  const markerCheck = await supabaseAdmin
+    .from("review_assignments")
+    .select("no_response_notified_at")
+    .limit(1);
+  const hasInitialNoticeColumn = !markerCheck.error;
+  if (markerCheck.error && !markerCheck.error.message.includes("no_response_notified_at")) {
+    throw new Error(markerCheck.error.message);
+  }
+  const reminderColumns = `id, submission_id, reviewer_email, reviewer_name, status, assigned_at, due_at, responded_at, invite_token, review_submitted_at, invite_reminder_sent_at, review_reminder_sent_at, followup_staff_notified_at, no_response_followup_sent_at${hasInitialNoticeColumn ? ", no_response_notified_at" : ""}`;
   const [activeResult, retryResult] = await Promise.all([
     supabaseAdmin
       .from("review_assignments")
@@ -189,7 +199,7 @@ export async function runReviewReminders(): Promise<{
   if (retryResult.error) throw new Error(retryResult.error.message);
   const rows = [...(activeResult.data ?? []), ...(retryResult.data ?? [])];
 
-  const list = (rows ?? []) as Array<{
+  const list = (rows ?? []) as unknown as Array<{
     id: string;
     submission_id: string;
     reviewer_email: string;
@@ -203,7 +213,7 @@ export async function runReviewReminders(): Promise<{
     invite_reminder_sent_at: string | null;
     review_reminder_sent_at: string | null;
     followup_staff_notified_at: string | null;
-    no_response_notified_at: string | null;
+    no_response_notified_at?: string | null;
     no_response_followup_sent_at: string | null;
   }>;
 
@@ -314,9 +324,12 @@ export async function runReviewReminders(): Promise<{
     }
 
     if (status === "no_response") {
-      const initialAlert = !r.no_response_notified_at;
+      const noticeMarker = hasInitialNoticeColumn
+        ? r.no_response_notified_at
+        : r.no_response_followup_sent_at;
+      const initialAlert = !noticeMarker;
       if (!initialAlert) {
-        const lastAlert = r.no_response_followup_sent_at ?? r.no_response_notified_at!;
+        const lastAlert = r.no_response_followup_sent_at ?? noticeMarker!;
         if (lastAlert >= days(7)) continue;
         const { data: replacement, error: replacementError } = await supabaseAdmin
           .from("review_assignments")
@@ -332,26 +345,39 @@ export async function runReviewReminders(): Promise<{
         if (replacement?.length) continue;
       }
       try {
-        await sendTemplateEmailToMany("reviewer-no-response", MASTER_STAFF_EMAILS, (to) => ({
-          idempotencyKey: initialAlert
-            ? `reviewer-no-response-${r.id}-${to}`
-            : `reviewer-no-response-followup-${r.id}-${Math.floor(now / (7 * 24 * 60 * 60 * 1000))}-${to}`,
-          replyTo: "NYRJINFO@gmail.com",
-          templateData: {
-            reviewerName: r.reviewer_name || "Reviewer",
-            reviewerEmail: r.reviewer_email,
-            title,
+        const { queuePeerNotification, processPeerNotification } =
+          await import("./peer-notifications.server");
+        for (const to of MASTER_STAFF_EMAILS) {
+          const queued = await queuePeerNotification({
+            key: initialAlert
+              ? `reviewer-no-response-${r.id}-${to}`
+              : `reviewer-no-response-followup-${r.id}-${Math.floor(now / (7 * 24 * 60 * 60 * 1000))}-${to}`,
             submissionId: r.submission_id,
-            dueDate: r.due_at ? fmt(r.due_at) : "",
-            acceptedInvitation,
-            dashboardUrl: `${SITE_URL}/admin/submissions`,
-          },
-        }));
+            assignmentId: r.id,
+            event: "reviewer_no_response_staff",
+            template: "reviewer-no-response",
+            recipient: to,
+            replyTo: "NYRJINFO@gmail.com",
+            data: {
+              reviewerName: r.reviewer_name || "Reviewer",
+              reviewerEmail: r.reviewer_email,
+              title,
+              submissionId: r.submission_id,
+              dueDate: r.due_at ? fmt(r.due_at) : "",
+              acceptedInvitation,
+              dashboardUrl: `${SITE_URL}/admin/submissions`,
+            },
+          });
+          const delivery = await processPeerNotification(queued.id);
+          if (delivery.status !== "provider_accepted" && queued.status !== "provider_accepted") {
+            throw new Error("Staff deadline alert is queued or needs provider reconciliation.");
+          }
+        }
         const notifiedAt = new Date().toISOString();
         const { error: notifiedError } = await supabaseAdmin
           .from("review_assignments")
           .update(
-            (initialAlert
+            (initialAlert && hasInitialNoticeColumn
               ? { no_response_notified_at: notifiedAt }
               : { no_response_followup_sent_at: notifiedAt }) as never,
           )

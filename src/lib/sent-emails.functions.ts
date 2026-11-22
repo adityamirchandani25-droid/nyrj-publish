@@ -5,6 +5,8 @@ const ListSchema = z.object({
   staffToken: z.string().min(1),
   search: z.string().trim().max(200).optional(),
   limit: z.number().int().min(1).max(200).optional(),
+  offset: z.number().int().min(0).max(100000).optional(),
+  status: z.enum(["sent", "failed", "retrying"]).optional(),
 });
 
 const RetryOneSchema = z.object({
@@ -28,6 +30,7 @@ export type SentEmailRow = {
   reply_to: string | null;
   status: string;
   error: string | null;
+  canRetry?: boolean;
 };
 
 export type RetryEmailsResult = {
@@ -35,6 +38,35 @@ export type RetryEmailsResult = {
   sent: number;
   failed: number;
 };
+
+// These messages update manuscript, assignment, or reminder state when the
+// original workflow sends them. Replaying the archive would bypass that state.
+const WORKFLOW_EMAILS = new Set([
+  "manuscript-submission",
+  "submission-confirmation",
+  "initial-review-assignment",
+  "initial-reviewer-account",
+  "reviewer-account-request",
+  "reviewer-account-approved",
+  "reviewer-response",
+  "review-thank-you",
+  "reviewer-password-reset",
+  "editor-account-approved",
+  "author-edits",
+  "author-revision-request",
+  "author-revision-reminder",
+  "author-revision-overdue",
+  "editor-recommendation",
+  "initial-review-workload",
+  "review-received",
+  "reviewer-invitation",
+  "reviewer-revision",
+  "reviewer-reminder",
+  "reviewer-no-response",
+  "reviewer-followup-staff",
+  "revision-received",
+  "submission-status",
+]);
 
 /** Full archive of every email the site has sent, readable only by signed-in staff. */
 export const listSentEmails = createServerFn({ method: "POST" })
@@ -50,7 +82,10 @@ export const listSentEmails = createServerFn({ method: "POST" })
         "id, created_at, template, to_email, subject, html, text_body, reply_to, status, error",
       )
       .order("created_at", { ascending: false })
-      .limit(data.limit ?? 100);
+      .order("id", { ascending: false })
+      .range(data.offset ?? 0, (data.offset ?? 0) + (data.limit ?? 100) - 1);
+
+    if (data.status) q = q.eq("status", data.status);
 
     const search = data.search?.trim();
     if (search) {
@@ -72,7 +107,10 @@ export const listSentEmails = createServerFn({ method: "POST" })
       console.error("[server] listSentEmails error:", error);
       throw new Error("Could not load the email archive. Please try again.");
     }
-    return (rows ?? []) as SentEmailRow[];
+    return ((rows ?? []) as SentEmailRow[]).map((row) => ({
+      ...row,
+      canRetry: row.status === "failed" && !WORKFLOW_EMAILS.has(row.template),
+    }));
   });
 
 /** Retries one archived failure using its stored, already-rendered content. */
@@ -93,9 +131,9 @@ export const retrySentEmail = createServerFn({ method: "POST" })
     if (error) throw new Error("Could not load the failed email. Please try again.");
     if (!row) throw new Error("That email record no longer exists.");
     if (row.status !== "failed") return { attempted: 0, sent: 0, failed: 0 };
-    if (["reviewer-invitation", "reviewer-revision", "revision-received"].includes(row.template)) {
+    if (WORKFLOW_EMAILS.has(row.template)) {
       throw new Error(
-        "This message is managed by the peer notification outbox. Use the assignment reminder control or check notification issues before retrying.",
+        "This message is managed by its manuscript or reviewer workflow. Retry from the paper or let its scheduled job run so delivery status stays accurate.",
       );
     }
 
@@ -111,18 +149,20 @@ export const retryFailedEmails = createServerFn({ method: "POST" })
     verifyStaffToken(data.staffToken);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: rows, error } = await supabaseAdmin
-      .from("sent_emails")
-      .select(
-        "id, created_at, template, to_email, subject, html, text_body, reply_to, status, error",
-      )
-      .eq("status", "failed")
-      .not("template", "in", '("reviewer-invitation","reviewer-revision","revision-received")')
-      .order("created_at", { ascending: true })
-      .limit(data.limit ?? 20);
-    if (error) throw new Error("Could not load failed emails. Please try again.");
-
-    const list = (rows ?? []) as SentEmailRow[];
+    const { allRows } = await import("./review-workflow.server");
+    const rows = await allRows((from, to) =>
+      supabaseAdmin
+        .from("sent_emails")
+        .select(
+          "id, created_at, template, to_email, subject, html, text_body, reply_to, status, error",
+        )
+        .eq("status", "failed")
+        .order("created_at", { ascending: true })
+        .range(from, to),
+    );
+    const list = (rows as SentEmailRow[])
+      .filter((row) => !WORKFLOW_EMAILS.has(row.template))
+      .slice(0, data.limit ?? 20);
     let sent = 0;
     for (const row of list) {
       if (await retryRow(row)) sent += 1;
@@ -133,11 +173,12 @@ export const retryFailedEmails = createServerFn({ method: "POST" })
 async function retryRow(row: SentEmailRow): Promise<boolean> {
   // These events have their own idempotent outbox. Retrying an archived copy
   // bypasses assignment/version checks and can duplicate a queued delivery.
-  if (["reviewer-invitation", "reviewer-revision", "revision-received"].includes(row.template)) {
+  if (WORKFLOW_EMAILS.has(row.template)) {
     return false;
   }
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { resendRenderedEmail } = await import("./email-templates/send-email");
+  const { DeliveryUncertainError, resendRenderedEmail } =
+    await import("./email-templates/send-email");
 
   // Mark the row before sending. If delivery succeeds but the final archive
   // update fails, it remains non-retryable instead of risking a duplicate.
@@ -177,7 +218,10 @@ async function retryRow(row: SentEmailRow): Promise<boolean> {
     const detail = error instanceof Error ? error.message : String(error);
     const { error: updateError } = await supabaseAdmin
       .from("sent_emails")
-      .update({ status: "failed", error: detail.slice(0, 500) } as never)
+      .update({
+        status: error instanceof DeliveryUncertainError ? "retrying" : "failed",
+        error: detail.slice(0, 500),
+      } as never)
       .eq("id", row.id);
     if (updateError) console.error("[server] failed to update email retry status:", updateError);
     console.error(`[server] retry for email ${row.id} failed:`, error);

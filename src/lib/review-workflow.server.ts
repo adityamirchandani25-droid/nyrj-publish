@@ -41,7 +41,7 @@ export async function reviewOverview() {
       db
         .from("review_assignments")
         .select(
-          "id,submission_id,reviewer_name,reviewer_email,status,review_submitted_at,edits_sent_at",
+          "id,submission_id,reviewer_name,reviewer_email,status,due_at,review_submitted_at,edits_sent_at",
         )
         .order("id")
         .range(a, b),
@@ -134,7 +134,8 @@ export async function dispatchReviewNotifications(submissionId?: string) {
     if (submissionId) q = q.eq("submission_id", submissionId);
     return q;
   });
-  const { sendTemplateEmail } = await import("./email-templates/send-email");
+  const { DeliveryUncertainError, sendTemplateEmail } =
+    await import("./email-templates/send-email");
   let sent = 0;
   for (const v of versions) {
     const { error: seedError } = await db.from("review_staff_notifications").upsert(
@@ -184,6 +185,14 @@ export async function dispatchReviewNotifications(submissionId?: string) {
         });
         if (!delivered.sent) throw new Error("Recipient suppressed by email service.");
       } catch (error) {
+        if (error instanceof DeliveryUncertainError) {
+          const { error: uncertainError } = await db
+            .from("review_staff_notifications")
+            .update({ error: `${error.message} — check SendGrid before retrying` })
+            .eq("id", recipient.id);
+          if (uncertainError) throw new Error(uncertainError.message);
+          continue;
+        }
         const { error: saveError } = await db
           .from("review_staff_notifications")
           .update({
@@ -232,7 +241,8 @@ export async function sendRevisionReminders() {
       .order("id")
       .range(a, b),
   );
-  const { sendTemplateEmail } = await import("./email-templates/send-email");
+  const { DeliveryUncertainError, sendTemplateEmail } =
+    await import("./email-templates/send-email");
   const { audit } = await import("./peer-review.server");
   let sent = 0;
   for (const paper of candidates) {
@@ -279,6 +289,15 @@ export async function sendRevisionReminders() {
       });
       if (!delivered.sent) throw new Error("Recipient suppressed by email service.");
     } catch (error) {
+      if (error instanceof DeliveryUncertainError) {
+        const { error: uncertainError } = await db
+          .from("revision_reminder_log")
+          .update({ error: `${error.message} — check SendGrid before retrying` })
+          .eq("id", claim.id);
+        if (uncertainError) throw new Error(uncertainError.message);
+        console.error("[revision-reminder] delivery uncertain:", claim.id, error);
+        continue;
+      }
       const { error: saveError } = await db
         .from("revision_reminder_log")
         .update({
@@ -287,6 +306,7 @@ export async function sendRevisionReminders() {
         })
         .eq("id", claim.id);
       if (saveError) throw new Error(saveError.message);
+      console.error("[revision-reminder] email failed:", claim.id, error);
       continue;
     }
     const { error: saveError } = await db

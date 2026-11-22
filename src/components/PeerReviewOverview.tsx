@@ -12,18 +12,29 @@ export function PeerReviewOverview({ refreshKey }: { refreshKey: number }) {
   const [open, setOpen] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
-    listPeerReviewOverview({ data: { staffToken: staffToken() } })
-      .then((r) => {
-        if (active) {
-          setRows(r);
-          setError("");
-        }
-      })
-      .catch((e) => {
-        if (active) setError(e.message);
-      });
+    const refresh = () =>
+      listPeerReviewOverview({ data: { staffToken: staffToken() } })
+        .then((r) => {
+          if (active) {
+            setRows(r);
+            setError("");
+          }
+        })
+        .catch((e) => {
+          if (active) setError(e.message);
+        });
+    void refresh();
+    const whenVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    window.addEventListener("focus", whenVisible);
+    document.addEventListener("visibilitychange", whenVisible);
+    const timer = window.setInterval(whenVisible, 30_000);
     return () => {
       active = false;
+      window.removeEventListener("focus", whenVisible);
+      document.removeEventListener("visibilitychange", whenVisible);
+      window.clearInterval(timer);
     };
   }, [refreshKey]);
   const visible = rows

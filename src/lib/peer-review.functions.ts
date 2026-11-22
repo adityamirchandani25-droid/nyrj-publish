@@ -559,7 +559,7 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
 
     const { data: sub, error: submissionError } = await supabaseAdmin
       .from("manuscript_submissions")
-      .select("title, submitter_email, authors, resubmit_token, decision, deleted_at")
+      .select("title, submitter_email, authors, resubmit_token, status, decision, deleted_at")
       .eq("id", submissionId)
       .single();
     if (submissionError || !sub) throw new Error("Submission not found.");
@@ -568,6 +568,7 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
       submitter_email?: string;
       authors?: Array<{ name?: string }>;
       resubmit_token?: string | null;
+      status: string;
       decision?: string;
       deleted_at?: string | null;
     };
@@ -592,8 +593,39 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
     }
     const resubmitUrl = `${SITE_URL}/resubmit?token=${resubmitToken}`;
 
-    // Save the exact feedback first so the student account can show it even
-    // if email delivery is delayed or fails.
+    const { DeliveryUncertainError, sendTemplateEmail } =
+      await import("./email-templates/send-email");
+    try {
+      await sendTemplateEmail("author-edits", s.submitter_email, {
+        idempotencyKey: `author-edits-${data.assignmentId}-${Date.now()}`,
+        replyTo: "NYRJINFO@gmail.com",
+        templateData: {
+          authorName: Array.isArray(s.authors) ? (s.authors[0]?.name ?? "there") : "there",
+          title: s.title ?? "your manuscript",
+          body: data.body,
+          resubmitUrl,
+          hasReviewFile: data.includeFile,
+        },
+      });
+    } catch (sendError) {
+      if (s.status !== "waiting for edits") {
+        const recovery =
+          sendError instanceof DeliveryUncertainError
+            ? { revision_reminders_paused: true }
+            : { status: s.status };
+        const { error: recoveryError } = await supabaseAdmin
+          .from("manuscript_submissions")
+          .update(recovery as never)
+          .eq("id", submissionId)
+          .eq("status", "waiting for edits")
+          .eq("resubmit_token", resubmitToken);
+        if (recoveryError)
+          console.error("[server] could not restore failed author notice:", recoveryError);
+      }
+      throw sendError;
+    }
+    // Only record an author notification after SendGrid accepts the email.
+    // A failed send leaves the review ready for staff to retry.
     const { error: saveEditsError } = await supabaseAdmin
       .from("review_assignments")
       .update({
@@ -604,20 +636,10 @@ export const sendEditsToAuthor = createServerFn({ method: "POST" })
         edits_sent_file_name: data.includeFile ? a.review_file_name : null,
       } as never)
       .eq("id", data.assignmentId);
-    if (saveEditsError) throw new Error("Could not save the requested edits.");
-
-    const { sendTemplateEmail } = await import("./email-templates/send-email");
-    await sendTemplateEmail("author-edits", s.submitter_email, {
-      idempotencyKey: `author-edits-${data.assignmentId}-${Date.now()}`,
-      replyTo: "NYRJINFO@gmail.com",
-      templateData: {
-        authorName: Array.isArray(s.authors) ? (s.authors[0]?.name ?? "there") : "there",
-        title: s.title ?? "your manuscript",
-        body: data.body,
-        resubmitUrl,
-        hasReviewFile: data.includeFile,
-      },
-    });
+    if (saveEditsError)
+      throw new Error(
+        "Email accepted, but the author notification could not be recorded. Check sent emails before retrying.",
+      );
     const { error: followupError } = await supabaseAdmin
       .from("manuscript_submissions")
       .update({

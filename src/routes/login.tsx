@@ -482,12 +482,18 @@ function AmbassadorForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
         />
         <FieldRow label="Password" type="password" value={password} onChange={setPassword} />
         {mode === "signup" && (
-          <FieldRow
-            label="Ambassador Access Code"
-            type="password"
-            value={accessCode}
-            onChange={setAccessCode}
-          />
+          <>
+            <FieldRow
+              label="Ambassador Access Code"
+              type="password"
+              value={accessCode}
+              onChange={setAccessCode}
+            />
+            <p className="text-xs text-muted-foreground">
+              Use the current code from NYRJ staff to create an account. After that, log in with
+              your email and password.
+            </p>
+          </>
         )}
         {error && <p className="text-xs text-destructive">{error}</p>}
         {notice && <p className="text-xs text-accent">{notice}</p>}

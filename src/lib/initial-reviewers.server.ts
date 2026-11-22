@@ -97,19 +97,26 @@ export async function assignInitialReviewer(
 
   // Let them know.
   try {
-    const { sendTemplateEmail } = await import("./email-templates/send-email");
+    const { queuePeerNotification, processPeerNotification } =
+      await import("./peer-notifications.server");
     const { publicSiteUrl } = await import("./site-url.server");
     const siteUrl = publicSiteUrl();
-    await sendTemplateEmail("initial-review-assignment", pick.email, {
-      idempotencyKey: `initial-review-${submissionId}-${pick.email}`,
+    const queued = await queuePeerNotification({
+      key: `initial-review-${submissionId}-${pick.email.toLowerCase()}`,
+      submissionId,
+      event: "initial_reviewer_assignment",
+      template: "initial-review-assignment",
+      recipient: pick.email,
       replyTo: "NYRJINFO@gmail.com",
-      templateData: {
+      data: {
         reviewerName: pick.name,
         title,
         submissionId,
         dashboardUrl: `${siteUrl}/initial-reviewer`,
       },
     });
+    const delivery = await processPeerNotification(queued.id);
+    if (delivery.status === "failed") throw new Error(delivery.error);
   } catch (e) {
     console.error("[initial-reviewers] assignment email failed:", e);
   }

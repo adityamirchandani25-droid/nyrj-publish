@@ -193,6 +193,17 @@ function Desk({ session, onSignOut }: { session: Stored; onSignOut: () => void }
 
   useEffect(() => {
     void load();
+    const refresh = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    const timer = window.setInterval(refresh, 30_000);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      window.clearInterval(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.token]);
 
@@ -275,15 +286,17 @@ function PaperCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const [notificationStatus, setNotificationStatus] = useState<string | null>(null);
 
   async function send() {
     setBusy(true);
     setError(null);
     try {
-      await submitRecommendation({
+      const result = await submitRecommendation({
         data: { editorToken: token, submissionId: row.id, action, comments },
       });
       setSent(true);
+      setNotificationStatus(result.notificationStatus);
       setOpen(false);
       setComments("");
       onDone();
@@ -329,7 +342,11 @@ function PaperCard({
       )}
       {sent && (
         <p className="mt-3 text-xs text-primary">
-          Sent to staff for approval. Nothing goes to the author until they approve it.
+          Saved for staff approval.{" "}
+          {notificationStatus === "provider_accepted"
+            ? "SendGrid accepted the staff notification."
+            : "The staff email is pending or failed; staff can still see the recommendation in their dashboard."}{" "}
+          Nothing goes to the author until staff approve it.
         </p>
       )}
 

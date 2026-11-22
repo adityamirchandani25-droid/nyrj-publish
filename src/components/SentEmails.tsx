@@ -15,19 +15,27 @@ export function SentEmails() {
   const [rows, setRows] = useState<SentEmailRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<"all" | "sent" | "failed" | "retrying">("all");
+  const [hasMore, setHasMore] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [view, setView] = useState<"preview" | "text">("preview");
   const [retrying, setRetrying] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  async function load(term = search) {
+  async function load(term = search, offset = 0, selectedStatus = status) {
     setError(null);
     try {
-      setRows(
-        await listSentEmails({
-          data: { staffToken: staffToken(), search: term || undefined, limit: 100 },
-        }),
-      );
+      const page = await listSentEmails({
+        data: {
+          staffToken: staffToken(),
+          search: term || undefined,
+          status: selectedStatus === "all" ? undefined : selectedStatus,
+          limit: 100,
+          offset,
+        },
+      });
+      setRows((current) => (offset === 0 ? page : [...(current ?? []), ...page]));
+      setHasMore(page.length === 100);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load sent emails.");
     }
@@ -82,6 +90,21 @@ export function SentEmails() {
 
   return (
     <div className="mt-8 space-y-6">
+      <p className="text-sm text-muted-foreground">
+        “Accepted by SendGrid” means the provider accepted the request. Inbox delivery and bounces
+        cannot be confirmed from this archive until SendGrid event access is connected.
+      </p>
+      {(rows ?? []).some(
+        (row) => row.status === "failed" && /Maximum credits exceeded/i.test(row.error ?? ""),
+      ) && (
+        <p
+          role="alert"
+          className="border border-destructive bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          SendGrid has rejected recent mail because the account has no remaining credits. Restore
+          sending in SendGrid before retrying any failed workflow messages.
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <input
           value={search}
@@ -95,6 +118,21 @@ export function SentEmails() {
         <button className={btnGhost} onClick={() => void load()}>
           Search
         </button>
+        <select
+          className="border border-border bg-background px-3 py-2 text-sm"
+          aria-label="Filter email status"
+          value={status}
+          onChange={(event) => {
+            const next = event.target.value as typeof status;
+            setStatus(next);
+            void load(search, 0, next);
+          }}
+        >
+          <option value="all">All statuses</option>
+          <option value="sent">Accepted</option>
+          <option value="failed">Failed</option>
+          <option value="retrying">Retrying</option>
+        </select>
         <button
           className={btnGhost}
           onClick={() => {
@@ -106,12 +144,18 @@ export function SentEmails() {
         </button>
         <button
           className={btnGhost}
-          disabled={retrying !== null || !(rows ?? []).some((row) => row.status === "failed")}
+          disabled={retrying !== null || !(rows ?? []).some((row) => row.canRetry)}
           onClick={() => void retryAll()}
         >
           {retrying === "all" ? "Retrying…" : "Retry failed"}
         </button>
       </div>
+
+      {hasMore && (
+        <button className={btnGhost} onClick={() => void load(search, rows?.length ?? 0)}>
+          Load more emails
+        </button>
+      )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       {notice && <p className="text-sm text-accent">{notice}</p>}
@@ -138,7 +182,11 @@ export function SentEmails() {
               </div>
               <div className="mt-1 text-[11px] text-muted-foreground">
                 To {r.to_email} · {r.template}
-                {r.status !== "sent" && <span className="text-destructive"> · {r.status}</span>}
+                {r.status === "sent" ? (
+                  <span> · Accepted by SendGrid</span>
+                ) : (
+                  <span className="text-destructive"> · {r.status}</span>
+                )}
               </div>
             </button>
 
@@ -151,7 +199,7 @@ export function SentEmails() {
                     onClick={() => setView("preview")}
                     disabled={view === "preview"}
                   >
-                    Email as sent
+                    Preview
                   </button>
                   <button
                     className={btnGhost}
@@ -160,7 +208,7 @@ export function SentEmails() {
                   >
                     Plain text
                   </button>
-                  {r.status === "failed" && (
+                  {r.canRetry && (
                     <button
                       className={btnGhost}
                       disabled={retrying !== null}
@@ -188,7 +236,9 @@ export function SentEmails() {
         ))}
       </div>
 
-      {open && <p className={heading}>Showing full copy of the email exactly as delivered</p>}
+      {open && (
+        <p className={heading}>Showing the rendered email copy and recorded provider result</p>
+      )}
     </div>
   );
 }

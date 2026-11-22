@@ -22,6 +22,7 @@ export type AuthorManuscript = {
   manuscriptUrl: string | null;
   manuscriptFilename: string | null;
   submittedAt: string;
+  reviewerDueAt: string | null;
   resubmitToken: string | null;
   feedback: AuthorFeedback[];
   versions: Array<{
@@ -60,10 +61,9 @@ export const getAuthorDashboard = createServerFn({ method: "GET" })
       supabaseAdmin
         .from("review_assignments")
         .select(
-          "id, submission_id, edits_sent_at, edits_sent_body, edits_sent_file_path, edits_sent_file_name",
+          "id, submission_id, status, due_at, edits_sent_at, edits_sent_body, edits_sent_file_path, edits_sent_file_name",
         )
-        .in("submission_id", ids)
-        .not("edits_sent_at", "is", null),
+        .in("submission_id", ids),
       supabaseAdmin
         .from("editor_recommendations")
         .select("id, submission_id, comments, staff_message, reviewed_at")
@@ -150,6 +150,16 @@ export const getAuthorDashboard = createServerFn({ method: "GET" })
           (versions.data ?? []).find(
             (row) => row.submission_id === paper.id && row.version === paper.current_version,
           )?.created_at ?? paper.created_at,
+        reviewerDueAt:
+          (reviews.data ?? [])
+            .filter(
+              (row) =>
+                row.submission_id === paper.id &&
+                ["invited", "accepted"].includes(row.status) &&
+                row.due_at,
+            )
+            .map((row) => row.due_at!)
+            .sort()[0] ?? null,
         resubmitToken: paper.status === "waiting for edits" ? paper.resubmit_token : null,
         feedback,
         versions: (versions.data ?? [])

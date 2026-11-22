@@ -205,17 +205,18 @@ export const editorDesk = createServerFn({ method: "POST" })
     const me = await requireEditor(data.editorToken);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { data: rows, error } = await supabaseAdmin
-      .from("manuscript_submissions")
-      .select(DESK_COLS)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .limit(300);
-    if (error) throw new Error(error.message);
-    const all = (rows ?? []) as EditorDeskRow[];
-    const mine = all.filter(
-      (r) => (r.initial_reviewer_email ?? "").toLowerCase() === me.email.toLowerCase(),
-    );
+    const { allRows } = await import("./review-workflow.server");
+    const all = (await allRows((from, to) =>
+      supabaseAdmin
+        .from("manuscript_submissions")
+        .select(DESK_COLS)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(from, to),
+    )) as EditorDeskRow[];
+    const { editorDeskSections } = await import("./editor-desk");
+    const sections = editorDeskSections(all, me.email);
 
     const { data: recs } = await supabaseAdmin
       .from("editor_recommendations")
@@ -225,8 +226,8 @@ export const editorDesk = createServerFn({ method: "POST" })
 
     return {
       me,
-      assigned: mine,
-      all,
+      assigned: sections.assigned,
+      all: sections.all,
       myRecommendations: (recs ?? []) as Array<{
         id: string;
         submission_id: string;
@@ -293,33 +294,57 @@ export const submitRecommendation = createServerFn({ method: "POST" })
       );
     }
 
-    const { error } = await supabaseAdmin.from("editor_recommendations").insert({
-      submission_id: data.submissionId,
-      editor_name: me.name,
-      editor_email: me.email.toLowerCase(),
-      action: data.action,
-      comments: data.comments,
-      status: "pending",
-    } as never);
-    if (error) throw new Error(error.message);
+    const { data: saved, error } = await supabaseAdmin
+      .from("editor_recommendations")
+      .insert({
+        submission_id: data.submissionId,
+        editor_name: me.name,
+        editor_email: me.email.toLowerCase(),
+        action: data.action,
+        comments: data.comments,
+        status: "pending",
+      } as never)
+      .select("id")
+      .single();
+    if (error || !saved) throw new Error(error?.message ?? "Could not save recommendation.");
 
+    let notificationStatus: "provider_accepted" | "pending" | "failed" = "pending";
     try {
-      const { sendTemplateEmailToMany } = await import("./email-templates/send-email");
-      const stamp = Date.now();
-      await sendTemplateEmailToMany("editor-recommendation", STAFF_RECIPIENTS, (to) => ({
-        idempotencyKey: `editor-rec-${data.submissionId}-${me.id}-${stamp}-${to}`,
-        replyTo: me.email,
-        templateData: {
-          editorName: me.name,
-          editorEmail: me.email,
-          title: s.title,
-          action: data.action,
-          comments: data.comments,
-          dashboardUrl: `${SITE_URL}/admin/submissions`,
-        },
-      }));
+      const { queuePeerNotification, processPeerNotification } =
+        await import("./peer-notifications.server");
+      const jobs = await Promise.all(
+        STAFF_RECIPIENTS.map((to) =>
+          queuePeerNotification({
+            key: `editor-rec-${saved.id}-${to.toLowerCase()}`,
+            submissionId: data.submissionId,
+            event: "editor_recommendation_staff",
+            template: "editor-recommendation",
+            recipient: to,
+            replyTo: me.email,
+            data: {
+              recommendationId: saved.id,
+              editorName: me.name,
+              editorEmail: me.email,
+              title: s.title,
+              action: data.action,
+              comments: data.comments,
+              dashboardUrl: `${SITE_URL}/admin/submissions`,
+            },
+          }),
+        ),
+      );
+      const deliveries = await Promise.all(jobs.map((job) => processPeerNotification(job.id)));
+      notificationStatus = deliveries.every(
+        (delivery, index) =>
+          delivery.status === "provider_accepted" || jobs[index]?.status === "provider_accepted",
+      )
+        ? "provider_accepted"
+        : deliveries.some((delivery) => delivery.status === "failed")
+          ? "failed"
+          : "pending";
     } catch (err) {
       console.error("[server] editor recommendation email failed:", err);
+      notificationStatus = "failed";
     }
 
     await audit(
@@ -328,7 +353,7 @@ export const submitRecommendation = createServerFn({ method: "POST" })
       "Editor recommendation submitted",
       `${data.action} — awaiting staff approval`,
     );
-    return { ok: true };
+    return { ok: true, notificationStatus };
   });
 
 /* --------------------------- staff: recommendations ----------------------- */
@@ -425,7 +450,7 @@ export const resolveRecommendation = createServerFn({ method: "POST" })
 
     const { data: subRow } = await supabaseAdmin
       .from("manuscript_submissions")
-      .select("id, title, submitter_email, authors, resubmit_token")
+      .select("id, title, submitter_email, authors, resubmit_token, status")
       .eq("id", rec.submission_id)
       .single();
     const sub = subRow as {
@@ -433,6 +458,7 @@ export const resolveRecommendation = createServerFn({ method: "POST" })
       submitter_email: string;
       authors: Array<{ name?: string }> | null;
       resubmit_token: string | null;
+      status: string;
     } | null;
     if (!sub) throw new Error("Submission not found.");
     const authorName = Array.isArray(sub.authors) ? (sub.authors[0]?.name ?? "there") : "there";
@@ -489,6 +515,22 @@ export const resolveRecommendation = createServerFn({ method: "POST" })
           console.error("[server] revision follow-up state failed:", followupError);
       } catch (err) {
         console.error("[server] author revision email failed:", err);
+        const { DeliveryUncertainError } = await import("./email-templates/send-email");
+        if (sub.status !== "waiting for edits") {
+          const recovery =
+            err instanceof DeliveryUncertainError
+              ? { revision_reminders_paused: true }
+              : { status: sub.status };
+          const { error: recoveryError } = await supabaseAdmin
+            .from("manuscript_submissions")
+            .update(recovery as never)
+            .eq("id", rec.submission_id)
+            .eq("status", "waiting for edits")
+            .eq("resubmit_token", token);
+          if (recoveryError)
+            console.error("[server] could not restore failed revision request:", recoveryError);
+        }
+        throw err;
       }
       try {
         const { updateSubmissionRow } = await import("./excel-sync.server");
@@ -524,6 +566,7 @@ export const resolveRecommendation = createServerFn({ method: "POST" })
         emailed = true;
       } catch (err) {
         console.error("[server] decision email failed:", err);
+        throw err;
       }
     }
 

@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { getAuthorDashboard, type AuthorManuscript } from "@/lib/author-dashboard.functions";
+import { submissionTimeline } from "@/lib/submission-timeline";
 
 export function AuthorDashboard({ email }: { email: string }) {
   const [papers, setPapers] = useState<AuthorManuscript[] | null>(null);
@@ -79,6 +80,7 @@ export function AuthorDashboard({ email }: { email: string }) {
       <ul className="mt-5 space-y-5">
         {papers?.map((paper) => (
           <li key={paper.id} className="border border-border bg-card p-5">
+            <SubmissionStage paper={paper} />
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="font-serif text-xl text-primary">{paper.title}</h3>
@@ -168,5 +170,24 @@ export function AuthorDashboard({ email }: { email: string }) {
         ))}
       </ul>
     </section>
+  );
+}
+
+function SubmissionStage({ paper }: { paper: AuthorManuscript }) {
+  const timeline = submissionTimeline({
+    status: paper.status,
+    decision: paper.decision,
+    reviewerDueAt: paper.reviewerDueAt,
+  });
+  return (
+    <div className="mb-4 border-l-2 border-accent pl-3 text-sm">
+      <p>
+        <strong>Current stage:</strong> {timeline.stage}
+      </p>
+      <p>
+        <strong>Next:</strong> {timeline.next}
+      </p>
+      {timeline.estimate && <p>{timeline.estimate}</p>}
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { checkAmbassadorAccessCode } from "./ambassador-access.server";
 import { z } from "zod";
 import type { TablesInsert } from "@/integrations/supabase/types";
 
@@ -81,16 +81,6 @@ async function authorize(auth: { password?: string; staffToken?: string }) {
   }
 }
 
-function accessCodeMatches(candidate: string): boolean {
-  const expected = process.env.AMBASSADOR_ACCESS_CODE ?? process.env.AMBASSADOR_PASSWORD;
-  if (!expected) {
-    throw new Error("Ambassador registration is not configured. Please contact NYRJ staff.");
-  }
-  const left = createHash("sha256").update(candidate, "utf8").digest();
-  const right = createHash("sha256").update(expected, "utf8").digest();
-  return timingSafeEqual(left, right);
-}
-
 export const createAmbassadorAccount = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
     z
@@ -112,8 +102,10 @@ export const createAmbassadorAccount = createServerFn({ method: "POST" })
       windowSeconds: 60 * 60,
       identity: email,
     });
-    if (!accessCodeMatches(data.accessCode)) {
-      throw new Error("The ambassador access code is not valid.");
+    if (!checkAmbassadorAccessCode(data.accessCode)) {
+      throw new Error(
+        "This ambassador access code is invalid or has expired. Ask NYRJ staff for the current code.",
+      );
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");

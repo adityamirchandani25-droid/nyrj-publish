@@ -2,6 +2,7 @@ import { supabaseAdmin as db } from "@/integrations/supabase/client.server";
 import { DeliveryUncertainError, sendTemplateEmail } from "./email-templates/send-email";
 import { MASTER_STAFF_EMAILS } from "./staff-recipients";
 import { reviewSubmissionBlocker } from "./review-submission-availability";
+import { allRows } from "./review-workflow.server";
 
 export type PeerNotification = {
   id: string;
@@ -60,6 +61,55 @@ export async function processPeerNotification(id: string) {
   if (!row) return { status: "already_processed" as const };
 
   try {
+    if (row.event === "initial_reviewer_assignment" && row.submission_id) {
+      const { data: paper, error: paperError } = await db
+        .from("manuscript_submissions")
+        .select("initial_reviewer_email,decision,status,deleted_at")
+        .eq("id", row.submission_id)
+        .maybeSingle();
+      if (paperError) throw new Error(paperError.message);
+      if (
+        !paper ||
+        paper.deleted_at ||
+        paper.decision !== "pending" ||
+        paper.status === "published" ||
+        paper.initial_reviewer_email.trim().toLowerCase() !== row.recipient
+      ) {
+        await cancelPeerNotification(id);
+        return { status: "cancelled" as const };
+      }
+    }
+    if (row.event === "author_revision_overdue_staff" && row.submission_id) {
+      const { data: paper, error: paperError } = await db
+        .from("manuscript_submissions")
+        .select("status,decision,deleted_at,revision_requested_at")
+        .eq("id", row.submission_id)
+        .maybeSingle();
+      if (paperError) throw new Error(paperError.message);
+      if (
+        !paper ||
+        paper.deleted_at ||
+        paper.decision === "declined" ||
+        paper.status !== "waiting for edits" ||
+        paper.revision_requested_at !== row.template_data.requestedAt
+      ) {
+        await cancelPeerNotification(id);
+        return { status: "cancelled" as const };
+      }
+    }
+    if (row.event === "editor_recommendation_staff") {
+      const recommendationId = row.template_data.recommendationId;
+      const { data: recommendation, error: recommendationError } = await db
+        .from("editor_recommendations")
+        .select("status")
+        .eq("id", String(recommendationId ?? ""))
+        .maybeSingle();
+      if (recommendationError) throw new Error(recommendationError.message);
+      if (!recommendation || recommendation.status !== "pending") {
+        await cancelPeerNotification(id);
+        return { status: "cancelled" as const };
+      }
+    }
     // A completed or closed review must never receive an old invitation.
     if (
       row.assignment_id &&
@@ -183,16 +233,22 @@ async function cancelPeerNotification(id: string) {
 }
 
 export async function processDuePeerNotifications(limit = 100) {
-  const { data, error } = await db
-    .from("peer_notification_outbox")
-    .select("id")
-    .in("status", ["pending", "retrying"])
-    .lte("next_attempt_at", new Date().toISOString())
-    .order("created_at")
-    .limit(limit);
-  if (error) throw new Error(error.message);
+  const due = await allRows((from, to) =>
+    db
+      .from("peer_notification_outbox")
+      .select("id,status,last_error")
+      .in("status", ["pending", "retrying", "failed"])
+      .lte("next_attempt_at", new Date().toISOString())
+      .order("created_at")
+      .range(from, to),
+  );
   const results = [];
-  for (const row of data ?? []) {
+  for (const row of due) {
+    // A definite SendGrid quota rejection is safe to retry when credits are
+    // restored. Other terminal 4xx failures need staff correction first.
+    if (row.status === "failed" && !/Maximum credits exceeded/i.test(row.last_error ?? ""))
+      continue;
+    if (results.length >= limit) break;
     try {
       results.push(await processPeerNotification(row.id));
     } catch (cause) {

@@ -4,6 +4,7 @@ import { SiteLayout } from "@/components/SiteLayout";
 import { AuthorDashboard } from "@/components/AuthorDashboard";
 import { supabase } from "@/integrations/supabase/client";
 import { bridgeSupabaseSession, getSession, onAuthChange, type Session } from "@/lib/auth";
+import { submissionTimeline } from "@/lib/submission-timeline";
 
 export const Route = createFileRoute("/track")({
   head: () => ({
@@ -131,8 +132,10 @@ function TrackPage() {
                     </span>
                   </div>
                   <p className="mt-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    Status: <span className="text-accent">{r.status}</span>
+                    Current stage:{" "}
+                    <span className="text-accent">{submissionTimeline(r).stage}</span>
                   </p>
+                  <p className="mt-2 text-sm">Next: {submissionTimeline(r).next}</p>
                 </li>
               ))}
             </ul>

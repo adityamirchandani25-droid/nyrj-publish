@@ -220,7 +220,7 @@ export const chatAssistant = createServerFn({ method: "POST" })
       const { enforceRateLimit } = await import("./rate-limit.server");
       await enforceRateLimit({ scope: "sage-staff", limit: 60, windowSeconds: 600 });
       const { answerStaffQuestion } = await import("./sage-staff.server");
-      return answerStaffQuestion(data.messages.at(-1)!.content);
+      return answerStaffQuestion(data.messages.map((message) => message.content));
     }
     if (data.tools) {
       const { verifyDeveloperToken } = await import("./developer-auth.server");

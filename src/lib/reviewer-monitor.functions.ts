@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { currentRoundFeedback, wasSharedWithAuthor } from "./reviewer-monitor";
 
 function missingOutboxSchema(error: unknown): boolean {
   return (
@@ -16,7 +17,7 @@ export const listReviewerMonitor = createServerFn({ method: "POST" })
     verifyStaffToken(data.staffToken);
     const { supabaseAdmin: db } = await import("@/integrations/supabase/client.server");
     const { allRows } = await import("./review-workflow.server");
-    const [accounts, assignments, notifications, papers] = await Promise.all([
+    const [accounts, assignments, notifications, papers, feedback, versions] = await Promise.all([
       allRows((a, b) =>
         db
           .from("peer_reviewers")
@@ -29,7 +30,7 @@ export const listReviewerMonitor = createServerFn({ method: "POST" })
         db
           .from("review_assignments")
           .select(
-            "id,submission_id,reviewer_name,reviewer_email,status,assigned_at,due_at,responded_at,review_submitted_at",
+            "id,submission_id,reviewer_name,reviewer_email,status,assigned_at,due_at,responded_at,review_submitted_at,edits_sent_at",
           )
           .order("id")
           .range(a, b),
@@ -50,7 +51,21 @@ export const listReviewerMonitor = createServerFn({ method: "POST" })
       allRows((a, b) =>
         db
           .from("manuscript_submissions")
-          .select("id,title,current_version,deleted_at")
+          .select("id,title,current_version,status,decision,deleted_at")
+          .order("id")
+          .range(a, b),
+      ),
+      allRows((a, b) =>
+        db
+          .from("review_feedback_versions")
+          .select("assignment_id,submission_id,submitted_at,comments,file_path")
+          .order("id")
+          .range(a, b),
+      ),
+      allRows((a, b) =>
+        db
+          .from("manuscript_versions")
+          .select("submission_id,version,created_at")
           .order("id")
           .range(a, b),
       ),
@@ -58,6 +73,28 @@ export const listReviewerMonitor = createServerFn({ method: "POST" })
     const now = Date.now();
     const yellowDays = Number(process.env.REVIEWER_ATTENTION_DAYS ?? 7);
     const redOverdue = Number(process.env.REVIEWER_RED_OVERDUE_COUNT ?? 2);
+    const paperById = new Map(papers.map((p) => [p.id, p]));
+    const roundStart = new Map(
+      versions
+        .filter((v) => paperById.get(v.submission_id)?.current_version === v.version)
+        .map((v) => [v.submission_id, v.created_at]),
+    );
+    const feedbackByAssignment = new Map<string, typeof feedback>();
+    for (const version of feedback) {
+      const records = feedbackByAssignment.get(version.assignment_id) ?? [];
+      records.push(version);
+      feedbackByAssignment.set(version.assignment_id, records);
+    }
+    const returnedAt = (a: (typeof assignments)[number]) => {
+      const start = roundStart.get(a.submission_id) ?? a.assigned_at;
+      return currentRoundFeedback(feedbackByAssignment.get(a.id) ?? [], start);
+    };
+    const isOpen = (a: (typeof assignments)[number]) => {
+      const paper = paperById.get(a.submission_id);
+      return Boolean(
+        paper && !paper.deleted_at && paper.decision !== "declined" && paper.status !== "published",
+      );
+    };
     const byEmail = new Map<
       string,
       { name: string; email: string; assignments: typeof assignments }
@@ -80,46 +117,53 @@ export const listReviewerMonitor = createServerFn({ method: "POST" })
     }
     return [...byEmail.values()]
       .map((entry) => {
-        const active = entry.assignments.filter((a) => a.status !== "declined");
-        const completed = active.filter((a) => Boolean(a.review_submitted_at));
-        const pending = active.filter((a) => !a.review_submitted_at);
+        const active = entry.assignments.filter((a) => a.status !== "declined" && isOpen(a));
+        const completed = active.filter((a) => Boolean(returnedAt(a)));
+        const shared = completed.filter((a) => wasSharedWithAuthor(returnedAt(a), a.edits_sent_at));
+        const pending = active.filter((a) => !returnedAt(a) && a.status !== "no_response");
         const overdue = pending.filter((a) => a.due_at && Date.parse(a.due_at) < now);
         const missed = active.filter(
           (a) =>
-            a.status === "no_response" ||
-            (a.review_submitted_at && a.due_at && a.review_submitted_at > a.due_at),
+            a.status === "no_response" || (returnedAt(a) && a.due_at && returnedAt(a)! > a.due_at),
         );
         const responseTimes = completed
-          .map((a) => (Date.parse(a.review_submitted_at!) - Date.parse(a.assigned_at)) / 86400000)
+          .map(
+            (a) =>
+              (Date.parse(returnedAt(a)!) -
+                Date.parse(roundStart.get(a.submission_id) ?? a.assigned_at)) /
+              86400000,
+          )
           .filter(Number.isFinite);
         const averageResponseDays = responseTimes.length
           ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
           : null;
         const lastResponse =
           [...active]
-            .map((a) => a.review_submitted_at ?? a.responded_at)
+            .map((a) => returnedAt(a))
             .filter((x): x is string => Boolean(x))
             .sort()
             .at(-1) ?? null;
-        const ids = new Set(entry.assignments.map((a) => a.id));
+        const ids = new Set(active.map((a) => a.id));
         const lastNotification =
           notifications
             .filter((n) => ids.has(n.assignment_id ?? ""))
             .sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null;
         const status =
-          active.length < 2 && overdue.length === 0
-            ? "Not Enough Data"
-            : overdue.length >= redOverdue || missed.length >= redOverdue
-              ? "Unresponsive"
-              : overdue.length > 0 ||
-                  (averageResponseDays !== null && averageResponseDays > yellowDays)
-                ? "Needs Attention"
+          missed.length >= redOverdue || overdue.length >= redOverdue
+            ? "Unresponsive"
+            : missed.length > 0 ||
+                overdue.length > 0 ||
+                (averageResponseDays !== null && averageResponseDays > yellowDays)
+              ? "Needs Attention"
+              : completed.length === 0
+                ? "Not Enough Data"
                 : "Responsive";
         return {
           name: entry.name,
           email: entry.email,
           assigned: active.length,
           completed: completed.length,
+          shared: shared.length,
           pending: pending.length,
           overdue: overdue.length,
           lastResponse,
@@ -135,12 +179,14 @@ export const listReviewerMonitor = createServerFn({ method: "POST" })
                 status: lastNotification.status,
               }
             : null,
-          papers: entry.assignments.map((a) => ({
+          papers: active.map((a) => ({
             assignmentId: a.id,
-            title: papers.find((p) => p.id === a.submission_id)?.title ?? "Manuscript",
-            version: papers.find((p) => p.id === a.submission_id)?.current_version ?? 1,
+            title: paperById.get(a.submission_id)?.title ?? "Manuscript",
+            version: paperById.get(a.submission_id)?.current_version ?? 1,
             status: a.status,
             dueAt: a.due_at,
+            returnedAt: returnedAt(a),
+            sharedAt: wasSharedWithAuthor(returnedAt(a), a.edits_sent_at) ? a.edits_sent_at : null,
           })),
         };
       })
@@ -153,15 +199,19 @@ export const listPeerNotificationIssues = createServerFn({ method: "POST" })
     const { verifyStaffToken } = await import("./staff-auth.server");
     verifyStaffToken(data.staffToken);
     const { supabaseAdmin: db } = await import("@/integrations/supabase/client.server");
-    const { data: rows, error } = await db
-      .from("peer_notification_outbox")
-      .select("id,event,recipient,status,attempts,last_error,created_at")
-      .in("status", ["failed", "retrying", "processing"])
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (error) {
-      if (missingOutboxSchema(new Error(error.message))) return [];
-      throw new Error(error.message);
+    const { allRows } = await import("./review-workflow.server");
+    try {
+      return await allRows((from, to) =>
+        db
+          .from("peer_notification_outbox")
+          .select("id,event,recipient,status,attempts,last_error,created_at")
+          .in("status", ["pending", "failed", "retrying", "processing"])
+          .order("created_at", { ascending: false })
+          .order("id")
+          .range(from, to),
+      );
+    } catch (error) {
+      if (missingOutboxSchema(error)) return [];
+      throw error;
     }
-    return rows ?? [];
   });

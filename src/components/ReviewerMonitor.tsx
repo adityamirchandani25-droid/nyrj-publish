@@ -8,7 +8,7 @@ type Issues = Awaited<ReturnType<typeof listPeerNotificationIssues>>;
 
 const notificationStatus: Record<string, { label: string; className: string }> = {
   delivered: { label: "Delivered", className: "text-green-700" },
-  provider_accepted: { label: "Accepted by SendGrid", className: "text-green-700" },
+  provider_accepted: { label: "Accepted by SendGrid", className: "text-amber-700" },
   pending: { label: "Queued", className: "text-amber-700" },
   processing: { label: "Sending", className: "text-amber-700" },
   retrying: { label: "Retrying", className: "text-amber-700" },
@@ -26,28 +26,40 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
   const [message, setMessage] = useState("");
   useEffect(() => {
     let active = true;
-    listReviewerMonitor({ data: { staffToken: staffToken() } })
-      .then((data) => {
-        if (active) setRows(data);
-      })
-      .catch((error: unknown) => {
-        if (active)
-          setMessage(
-            error instanceof Error ? error.message : "Could not load reviewer monitoring.",
-          );
-      });
-    listPeerNotificationIssues({ data: { staffToken: staffToken() } })
-      .then((data) => {
-        if (active) setIssues(data);
-      })
-      .catch((error: unknown) => {
-        if (active)
-          setMessage(
-            error instanceof Error ? error.message : "Could not load notification failures.",
-          );
-      });
+    const refresh = () => {
+      listReviewerMonitor({ data: { staffToken: staffToken() } })
+        .then((data) => {
+          if (active) setRows(data);
+        })
+        .catch((error: unknown) => {
+          if (active)
+            setMessage(
+              error instanceof Error ? error.message : "Could not load reviewer monitoring.",
+            );
+        });
+      listPeerNotificationIssues({ data: { staffToken: staffToken() } })
+        .then((data) => {
+          if (active) setIssues(data);
+        })
+        .catch((error: unknown) => {
+          if (active)
+            setMessage(
+              error instanceof Error ? error.message : "Could not load notification failures.",
+            );
+        });
+    };
+    refresh();
+    const whenVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", whenVisible);
+    document.addEventListener("visibilitychange", whenVisible);
+    const timer = window.setInterval(whenVisible, 30_000);
     return () => {
       active = false;
+      window.removeEventListener("focus", whenVisible);
+      document.removeEventListener("visibilitychange", whenVisible);
+      window.clearInterval(timer);
     };
   }, [refreshKey]);
   const visible = rows
@@ -84,7 +96,9 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
     <section className="mt-8 border border-border bg-card p-5" aria-label="Reviewer monitoring">
       <h2 className="font-serif text-2xl text-primary">Reviewer monitoring</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Live assignments · status reflects overdue work, missed deadlines, and response time
+        Current manuscript rounds · returned feedback and author notifications are tracked
+        separately. SendGrid acceptance does not confirm inbox delivery; bounce data is unavailable
+        until provider events are connected.
       </p>
       <div className="my-4 flex gap-3">
         <input
@@ -131,11 +145,12 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
             <tr className="border-b border-border">
               {[
                 "Reviewer",
-                "Assigned",
-                "Completed",
+                "Open assignments",
+                "Feedback returned",
+                "Sent to author",
                 "Pending",
                 "Overdue",
-                "Last response",
+                "Last feedback",
                 "Status",
                 "Last notification",
               ].map((x) => (
@@ -162,10 +177,15 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
                         <div key={p.assignmentId} className="border-l-2 border-accent pl-2 text-xs">
                           {p.title} · v{p.version} · {p.status}
                           <br />
+                          {p.returnedAt
+                            ? `Feedback returned ${new Date(p.returnedAt).toLocaleDateString()}`
+                            : "No feedback returned"}
+                          {p.sharedAt
+                            ? ` · Author notified ${new Date(p.sharedAt).toLocaleDateString()}`
+                            : ""}
+                          <br />
                           Due {p.dueAt ? new Date(p.dueAt).toLocaleDateString() : "—"}{" "}
-                          {["invited", "accepted", "review_received", "sent_to_author"].includes(
-                            p.status,
-                          ) && (
+                          {["invited", "accepted"].includes(p.status) && !p.returnedAt && (
                             <button
                               disabled={busy === p.assignmentId}
                               className="ml-2 text-primary underline disabled:opacity-50"
@@ -181,6 +201,7 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
                 </td>
                 <td className="p-2">{r.assigned}</td>
                 <td className="p-2">{r.completed}</td>
+                <td className="p-2">{r.shared}</td>
                 <td className="p-2">{r.pending}</td>
                 <td className="p-2">{r.overdue}</td>
                 <td className="p-2">

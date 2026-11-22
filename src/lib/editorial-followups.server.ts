@@ -9,8 +9,9 @@ export async function runEditorialFollowups(): Promise<{
   initialReviewerReminders: number;
 }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { sendTemplateEmail, sendTemplateEmailToMany } =
-    await import("./email-templates/send-email");
+  const { sendTemplateEmail } = await import("./email-templates/send-email");
+  const { queuePeerNotification, processPeerNotification } =
+    await import("./peer-notifications.server");
   const { audit } = await import("./peer-review.server");
   const now = Date.now();
 
@@ -41,16 +42,33 @@ export async function runEditorialFollowups(): Promise<{
     const key = `${row.id}-${requestedAt}`;
     if (requestedAt > monthAgo || row.revision_staff_alert_sent_at) continue;
     try {
-      await sendTemplateEmailToMany("author-revision-overdue", MASTER_STAFF_EMAILS, (to) => ({
-        idempotencyKey: `author-revision-overdue-${key}-${to}`,
-        replyTo: "NYRJINFO@gmail.com",
-        templateData: {
-          title: row.title,
-          authorEmail: row.submitter_email,
-          requestedDate: new Date(requestedAt).toLocaleDateString("en-US"),
-          dashboardUrl: "https://nyrj.org/admin/submissions",
-        },
-      }));
+      const jobs = await Promise.all(
+        MASTER_STAFF_EMAILS.map((to) =>
+          queuePeerNotification({
+            key: `author-revision-overdue-${key}-${to.toLowerCase()}`,
+            submissionId: row.id,
+            event: "author_revision_overdue_staff",
+            template: "author-revision-overdue",
+            recipient: to,
+            replyTo: "NYRJINFO@gmail.com",
+            data: {
+              title: row.title,
+              authorEmail: row.submitter_email,
+              requestedDate: new Date(requestedAt).toLocaleDateString("en-US"),
+              requestedAt,
+              dashboardUrl: "https://nyrj.org/admin/submissions",
+            },
+          }),
+        ),
+      );
+      const deliveries = await Promise.all(jobs.map((job) => processPeerNotification(job.id)));
+      if (
+        deliveries.some(
+          (delivery, index) =>
+            delivery.status !== "provider_accepted" && jobs[index]?.status !== "provider_accepted",
+        )
+      )
+        throw new Error("Staff overdue alert is queued or needs provider reconciliation.");
       const { error } = await supabaseAdmin
         .from("manuscript_submissions")
         .update({ revision_staff_alert_sent_at: new Date().toISOString() } as never)
