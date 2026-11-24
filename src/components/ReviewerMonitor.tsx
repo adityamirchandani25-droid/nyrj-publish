@@ -113,8 +113,11 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
     setBusy("brevo-batch");
     setMessage("");
     try {
+      if (confirmedBrevoFailures === 0) {
+        await reconcileBrevoRejections({ data: { staffToken: staffToken() } });
+      }
       const result = await retryConfirmedBrevoRejections({
-        data: { staffToken: staffToken(), limit: 5 },
+        data: { staffToken: staffToken(), limit: confirmedBrevoFailures === 0 ? 1 : 5 },
       });
       await refreshNotifications();
       setMessage(
@@ -225,18 +228,18 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
         >
           {busy === "brevo-reconcile" ? "Checking Brevo…" : "Find Brevo-rejected notifications"}
         </button>
-        {confirmedBrevoFailures > 0 && (
-          <button
-            type="button"
-            disabled={busy !== null}
-            onClick={() => void retryBrevoBatch()}
-            className="border border-primary bg-primary px-3 py-2 text-primary-foreground disabled:opacity-50"
-          >
-            {busy === "brevo-batch"
-              ? "Retrying…"
-              : `Retry up to 5 confirmed failures (${confirmedBrevoFailures} ready)`}
-          </button>
-        )}
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => void retryBrevoBatch()}
+          className="border border-primary bg-primary px-3 py-2 text-primary-foreground disabled:opacity-50"
+        >
+          {busy === "brevo-batch"
+            ? "Retrying…"
+            : confirmedBrevoFailures > 0
+              ? `Retry up to 5 confirmed failures (${confirmedBrevoFailures} ready)`
+              : "Check Brevo & retry 1"}
+        </button>
       </div>
       {issues.length > 0 && (
         <details className="mb-4 border border-amber-300 bg-amber-50 p-3 text-sm">

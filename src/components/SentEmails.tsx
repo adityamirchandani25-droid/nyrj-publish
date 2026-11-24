@@ -6,6 +6,10 @@ import {
   retrySentEmail,
   type SentEmailRow,
 } from "@/lib/sent-emails.functions";
+import {
+  reconcileBrevoRejections,
+  retryConfirmedBrevoRejections,
+} from "@/lib/reviewer-monitor.functions";
 
 const heading = "text-[10px] uppercase tracking-[0.18em] text-accent";
 const btnGhost =
@@ -86,11 +90,58 @@ export function SentEmails() {
     }
   }
 
+  async function retryBrevo(limit: 1 | 5) {
+    setRetrying(`brevo-${limit}`);
+    setError(null);
+    setNotice(null);
+    try {
+      const found = await reconcileBrevoRejections({ data: { staffToken: staffToken() } });
+      const result = await retryConfirmedBrevoRejections({
+        data: { staffToken: staffToken(), limit },
+      });
+      setNotice(
+        result.attempted === 0
+          ? `Brevo reported ${found.reopened} new sender rejections, but none are ready to retry.`
+          : `Retried ${result.attempted}: ${result.accepted} accepted by Brevo, ${result.cancelled} no longer needed, ${result.failed} failed, ${result.uncertain} uncertain. Check Brevo for Delivered before retrying more.`,
+      );
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not retry Brevo notifications.");
+    } finally {
+      setRetrying(null);
+    }
+  }
+
   const open = (rows ?? []).find((r) => r.id === openId) ?? null;
   const hasRetryableArchiveEmail = (rows ?? []).some((row) => row.canRetry);
 
   return (
     <div className="mt-8 space-y-6">
+      <div className="border border-border bg-card p-4">
+        <h2 className="font-serif text-xl text-primary">Retry Brevo-rejected notifications</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Brevo accepted some requests before rejecting the sender. Check its delivery events and
+          retry one confirmed rejection first. Then retry the rest in small batches.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={btnGhost}
+            disabled={retrying !== null}
+            onClick={() => void retryBrevo(1)}
+          >
+            {retrying === "brevo-1" ? "Checking and retrying…" : "Check Brevo & retry 1"}
+          </button>
+          <button
+            type="button"
+            className={btnGhost}
+            disabled={retrying !== null}
+            onClick={() => void retryBrevo(5)}
+          >
+            {retrying === "brevo-5" ? "Checking and retrying…" : "Retry next 5 confirmed failures"}
+          </button>
+        </div>
+      </div>
       <p className="text-sm text-muted-foreground">
         “Accepted by provider” means the provider accepted the request. Inbox delivery and bounces
         cannot be confirmed from this archive until provider event access is connected.
