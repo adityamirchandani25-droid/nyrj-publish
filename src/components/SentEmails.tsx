@@ -87,6 +87,7 @@ export function SentEmails() {
   }
 
   const open = (rows ?? []).find((r) => r.id === openId) ?? null;
+  const hasRetryableArchiveEmail = (rows ?? []).some((row) => row.canRetry);
 
   return (
     <div className="mt-8 space-y-6">
@@ -98,17 +99,6 @@ export function SentEmails() {
         Reviewer notification failures are retried from Reviewer monitoring. The archive retry
         button only applies to other failed emails.
       </p>
-      {(rows ?? []).some(
-        (row) => row.status === "failed" && /Maximum credits exceeded/i.test(row.error ?? ""),
-      ) && (
-        <p
-          role="alert"
-          className="border border-destructive bg-destructive/10 p-3 text-sm text-destructive"
-        >
-          Historical SendGrid messages were rejected when that account ran out of credits. Check the
-          active provider and its sending capacity before retrying failed workflow messages.
-        </p>
-      )}
       <div className="flex flex-wrap items-center gap-2">
         <input
           value={search}
@@ -146,13 +136,11 @@ export function SentEmails() {
         >
           Refresh
         </button>
-        <button
-          className={btnGhost}
-          disabled={retrying !== null || !(rows ?? []).some((row) => row.canRetry)}
-          onClick={() => void retryAll()}
-        >
-          {retrying === "all" ? "Retrying…" : "Retry archived failures"}
-        </button>
+        {hasRetryableArchiveEmail && (
+          <button className={btnGhost} disabled={retrying !== null} onClick={() => void retryAll()}>
+            {retrying === "all" ? "Retrying…" : "Retry archived failures"}
+          </button>
+        )}
         <a className={btnGhost} href="#reviewer-monitoring">
           Go to reviewer notifications ↑
         </a>
