@@ -3,6 +3,8 @@ import { staffToken } from "@/lib/auth";
 import {
   listReviewerMonitor,
   listPeerNotificationIssues,
+  reconcileBrevoRejections,
+  retryConfirmedBrevoRejections,
   retryPeerNotification,
 } from "@/lib/reviewer-monitor.functions";
 import { resendReviewerInvitation } from "@/lib/peer-review.functions";
@@ -76,6 +78,54 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
           ? a.completionRate - b.completionRate
           : b.overdue - a.overdue || a.name.localeCompare(b.name),
     );
+  const confirmedBrevoFailures = issues.filter(
+    (issue) =>
+      issue.status === "failed" &&
+      issue.last_error?.startsWith("Brevo rejected the sender after API acceptance."),
+  ).length;
+  async function refreshNotifications() {
+    const token = staffToken();
+    const [nextRows, nextIssues] = await Promise.all([
+      listReviewerMonitor({ data: { staffToken: token } }),
+      listPeerNotificationIssues({ data: { staffToken: token } }),
+    ]);
+    setRows(nextRows);
+    setIssues(nextIssues);
+  }
+  async function reconcileBrevo() {
+    setBusy("brevo-reconcile");
+    setMessage("");
+    try {
+      const result = await reconcileBrevoRejections({ data: { staffToken: staffToken() } });
+      await refreshNotifications();
+      setMessage(
+        result.reopened
+          ? `${result.reopened} Brevo-rejected notifications are ready to retry. Try one first, then use the batch button.`
+          : `Checked ${result.checked} Brevo messages; no confirmed sender rejections were found.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not check Brevo rejections.");
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function retryBrevoBatch() {
+    setBusy("brevo-batch");
+    setMessage("");
+    try {
+      const result = await retryConfirmedBrevoRejections({
+        data: { staffToken: staffToken(), limit: 5 },
+      });
+      await refreshNotifications();
+      setMessage(
+        `Retried ${result.attempted}: ${result.accepted} accepted by Brevo, ${result.cancelled} no longer needed, ${result.failed} failed, ${result.uncertain} uncertain, ${result.skipped} already handled. Check Brevo delivery logs before retrying more.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not retry Brevo rejections.");
+    } finally {
+      setBusy(null);
+    }
+  }
   async function resend(assignmentId: string) {
     setBusy(assignmentId);
     setMessage("");
@@ -166,6 +216,28 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
           {message}
         </p>
       )}
+      <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => void reconcileBrevo()}
+          className="border border-border px-3 py-2 text-primary disabled:opacity-50"
+        >
+          {busy === "brevo-reconcile" ? "Checking Brevo…" : "Find Brevo-rejected notifications"}
+        </button>
+        {confirmedBrevoFailures > 0 && (
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => void retryBrevoBatch()}
+            className="border border-primary bg-primary px-3 py-2 text-primary-foreground disabled:opacity-50"
+          >
+            {busy === "brevo-batch"
+              ? "Retrying…"
+              : `Retry up to 5 confirmed failures (${confirmedBrevoFailures} ready)`}
+          </button>
+        )}
+      </div>
       {issues.length > 0 && (
         <details className="mb-4 border border-amber-300 bg-amber-50 p-3 text-sm">
           <summary className="cursor-pointer font-medium">

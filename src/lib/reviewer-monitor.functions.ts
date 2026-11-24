@@ -240,3 +240,94 @@ export const retryPeerNotification = createServerFn({ method: "POST" })
     const { processPeerNotification } = await import("./peer-notifications.server");
     return processPeerNotification(data.id);
   });
+
+/** Reopen only messages Brevo confirms it rejected for an invalid sender. */
+export const reconcileBrevoRejections = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => z.object({ staffToken: z.string().min(1) }).parse(d))
+  .handler(async ({ data }) => {
+    const { verifyStaffToken } = await import("./staff-auth.server");
+    verifyStaffToken(data.staffToken);
+    const { supabaseAdmin: db } = await import("@/integrations/supabase/client.server");
+    const { allRows } = await import("./review-workflow.server");
+    const { confirmedBrevoSenderRejections } = await import("./brevo-rejections");
+    const { recentBrevoDeliveryEvents } = await import("./brevo-rejections.server");
+    const accepted = await allRows((from, to) =>
+      db
+        .from("peer_notification_outbox")
+        .select("id,recipient,provider_message_id")
+        .eq("status", "provider_accepted")
+        .not("provider_message_id", "is", null)
+        .order("id")
+        .range(from, to),
+    );
+    const candidates = accepted.filter((row) => row.provider_message_id?.startsWith("<"));
+    if (!candidates.length) return { checked: 0, reopened: 0 };
+    const events = await recentBrevoDeliveryEvents();
+    const rejected = confirmedBrevoSenderRejections(candidates, events);
+    if (!rejected.size) return { checked: candidates.length, reopened: 0 };
+
+    const { data: reopened, error } = await db
+      .from("peer_notification_outbox")
+      .update({
+        status: "failed",
+        next_attempt_at: new Date().toISOString(),
+        last_error:
+          "Brevo rejected the sender after API acceptance. Retry after sender verification.",
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq("status", "provider_accepted")
+      .in("id", [...rejected.keys()])
+      .select("id");
+    if (error) throw new Error(`Could not reopen Brevo rejections: ${error.message}`);
+    return { checked: candidates.length, reopened: reopened?.length ?? 0 };
+  });
+
+/** Staff-triggered, small batch retry of only confirmed Brevo sender rejections. */
+export const retryConfirmedBrevoRejections = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) =>
+    z.object({ staffToken: z.string().min(1), limit: z.number().int().min(1).max(5) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { verifyStaffToken } = await import("./staff-auth.server");
+    verifyStaffToken(data.staffToken);
+    if (
+      process.env.EMAIL_PROVIDER?.trim().toLowerCase() !== "brevo" ||
+      !process.env.BREVO_API_KEY?.trim() ||
+      !process.env.BREVO_FROM_EMAIL?.trim()
+    ) {
+      throw new Error("Brevo sending is not configured.");
+    }
+    const { supabaseAdmin: db } = await import("@/integrations/supabase/client.server");
+    const { data: rows, error } = await db
+      .from("peer_notification_outbox")
+      .select("id")
+      .eq("status", "failed")
+      .like("last_error", "Brevo rejected the sender after API acceptance.%")
+      .order("created_at")
+      .limit(data.limit);
+    if (error) throw new Error(`Could not list Brevo rejections: ${error.message}`);
+    const { processPeerNotification } = await import("./peer-notifications.server");
+    const results = await Promise.allSettled(
+      (rows ?? []).map((row) => processPeerNotification(row.id)),
+    );
+    return {
+      attempted: results.length,
+      accepted: results.filter(
+        (result) => result.status === "fulfilled" && result.value.status === "provider_accepted",
+      ).length,
+      cancelled: results.filter(
+        (result) => result.status === "fulfilled" && result.value.status === "cancelled",
+      ).length,
+      failed: results.filter(
+        (result) =>
+          result.status === "rejected" ||
+          (result.status === "fulfilled" && result.value.status === "failed"),
+      ).length,
+      uncertain: results.filter(
+        (result) => result.status === "fulfilled" && result.value.status === "uncertain",
+      ).length,
+      skipped: results.filter(
+        (result) => result.status === "fulfilled" && result.value.status === "already_processed",
+      ).length,
+    };
+  });
