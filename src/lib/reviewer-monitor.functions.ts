@@ -38,7 +38,9 @@ export const listReviewerMonitor = createServerFn({ method: "POST" })
       allRows((a, b) =>
         db
           .from("peer_notification_outbox")
-          .select("assignment_id,recipient,status,created_at,provider_accepted_at,delivered_at")
+          .select(
+            "id,assignment_id,recipient,status,last_error,created_at,provider_accepted_at,delivered_at",
+          )
           .order("id")
           .range(a, b),
       ).catch((error: unknown) => {
@@ -172,11 +174,13 @@ export const listReviewerMonitor = createServerFn({ method: "POST" })
           completionRate: active.length ? completed.length / active.length : 0,
           lastNotification: lastNotification
             ? {
+                id: lastNotification.id,
                 at:
                   lastNotification.delivered_at ??
                   lastNotification.provider_accepted_at ??
                   lastNotification.created_at,
                 status: lastNotification.status,
+                error: lastNotification.last_error,
               }
             : null,
           papers: active.map((a) => ({
@@ -214,4 +218,25 @@ export const listPeerNotificationIssues = createServerFn({ method: "POST" })
       if (missingOutboxSchema(error)) return [];
       throw error;
     }
+  });
+
+export const retryPeerNotification = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) =>
+    z.object({ staffToken: z.string().min(1), id: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { verifyStaffToken } = await import("./staff-auth.server");
+    verifyStaffToken(data.staffToken);
+    const { supabaseAdmin: db } = await import("@/integrations/supabase/client.server");
+    const { data: row, error } = await db
+      .from("peer_notification_outbox")
+      .update({ next_attempt_at: new Date().toISOString() })
+      .eq("id", data.id)
+      .eq("status", "failed")
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) throw new Error("This notification is no longer failed. Refresh to see its status.");
+    const { processPeerNotification } = await import("./peer-notifications.server");
+    return processPeerNotification(data.id);
   });

@@ -94,6 +94,10 @@ export function SentEmails() {
         “Accepted by provider” means the provider accepted the request. Inbox delivery and bounces
         cannot be confirmed from this archive until provider event access is connected.
       </p>
+      <p className="text-sm text-muted-foreground">
+        Reviewer notification failures are retried from Reviewer monitoring. The archive retry
+        button only applies to other failed emails.
+      </p>
       {(rows ?? []).some(
         (row) => row.status === "failed" && /Maximum credits exceeded/i.test(row.error ?? ""),
       ) && (
@@ -147,8 +151,11 @@ export function SentEmails() {
           disabled={retrying !== null || !(rows ?? []).some((row) => row.canRetry)}
           onClick={() => void retryAll()}
         >
-          {retrying === "all" ? "Retrying…" : "Retry failed"}
+          {retrying === "all" ? "Retrying…" : "Retry archived failures"}
         </button>
+        <a className={btnGhost} href="#reviewer-monitoring">
+          Go to reviewer notifications ↑
+        </a>
       </div>
 
       {hasMore && (

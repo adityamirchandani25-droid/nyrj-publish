@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { SiteLayout } from "@/components/SiteLayout";
-import { getLibrary, updateEntry, type LibraryEntry } from "@/lib/library";
+import { getLibrary, removeEntry, updateEntry, type LibraryEntry } from "@/lib/library";
 import { getSession, isStaff, onAuthChange, type Session } from "@/lib/auth";
 import { generateArticleCitations } from "@/lib/citation-generator.functions";
 
@@ -349,7 +349,7 @@ function Library() {
 
         {staff && (
           <p className="mt-10 text-xs text-muted-foreground">
-            Staff mode: publication metadata can be edited below each manuscript.
+            Staff mode: publication metadata can be edited or papers deleted below each manuscript.
           </p>
         )}
       </section>
@@ -404,6 +404,7 @@ function StaffEntryEditor({
   const [issue, setIssue] = useState(entry.issue ?? "");
   const [publicationDate, setPublicationDate] = useState(entry.publicationDate ?? "");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [msg, setMsg] = useState("");
 
   async function handleSave() {
@@ -433,15 +434,49 @@ function StaffEntryEditor({
     }
   }
 
+  async function handleDelete() {
+    if (
+      !window.confirm(
+        `Permanently delete "${entry.title}" from the Library? This cannot be undone.`,
+      )
+    )
+      return;
+    setDeleting(true);
+    setMsg("");
+    try {
+      await removeEntry(entry.id);
+      await onSaved();
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Delete failed.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="mt-2">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="text-[10px] uppercase tracking-[0.2em] text-accent hover:text-primary underline underline-offset-4"
-      >
-        {open ? "Close editor" : "Edit issue / date / DOI / featured / award / ORCIDs"}
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="text-[10px] uppercase tracking-[0.2em] text-accent hover:text-primary underline underline-offset-4"
+        >
+          {open ? "Close editor" : "Edit issue / date / DOI / featured / award / ORCIDs"}
+        </button>
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={deleting}
+          className="text-[10px] uppercase tracking-[0.2em] text-destructive hover:underline underline-offset-4 disabled:opacity-50"
+        >
+          {deleting ? "Deleting…" : "Delete paper"}
+        </button>
+        {msg && !open && (
+          <span role="alert" className="text-xs text-destructive">
+            {msg}
+          </span>
+        )}
+      </div>
       {open && (
         <div className="mt-3 border border-border bg-card p-4 space-y-3 text-sm">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

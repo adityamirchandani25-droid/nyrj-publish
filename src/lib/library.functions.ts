@@ -135,7 +135,33 @@ export const libraryRemove = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { verifyStaffToken } = await import("./staff-auth.server");
     verifyStaffToken(data.staffToken);
-    throw new Error("Published manuscripts are retained. Contact the journal to correct an entry.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: entry, error: lookupError } = await supabaseAdmin
+      .from("library_entries")
+      .select("file_path")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (lookupError) throw new Error(lookupError.message);
+    if (!entry) throw new Error("Library paper not found.");
+
+    // Remove the public record first so a storage failure cannot leave a live
+    // article pointing to a missing manuscript file.
+    const { data: deleted, error: deleteError } = await supabaseAdmin
+      .from("library_entries")
+      .delete()
+      .eq("id", data.id)
+      .select("id")
+      .maybeSingle();
+    if (deleteError) throw new Error(deleteError.message);
+    if (!deleted) throw new Error("Library paper not found.");
+
+    if (entry.file_path) {
+      const { error: storageError } = await supabaseAdmin.storage
+        .from("library")
+        .remove([entry.file_path]);
+      if (storageError) console.error("[server] library file cleanup failed:", storageError);
+    }
+    return { ok: true as const };
   });
 
 export const libraryUpdate = createServerFn({ method: "POST" })

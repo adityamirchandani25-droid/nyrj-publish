@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { staffToken } from "@/lib/auth";
-import { listReviewerMonitor, listPeerNotificationIssues } from "@/lib/reviewer-monitor.functions";
+import {
+  listReviewerMonitor,
+  listPeerNotificationIssues,
+  retryPeerNotification,
+} from "@/lib/reviewer-monitor.functions";
 import { resendReviewerInvitation } from "@/lib/peer-review.functions";
 
 type Rows = Awaited<ReturnType<typeof listReviewerMonitor>>;
@@ -24,6 +28,7 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [retryFeedback, setRetryFeedback] = useState<{ id: string; text: string } | null>(null);
   useEffect(() => {
     let active = true;
     const refresh = () => {
@@ -92,8 +97,45 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
       setBusy(null);
     }
   }
+  async function retryNotification(id: string) {
+    setBusy(id);
+    setMessage("");
+    setRetryFeedback(null);
+    try {
+      const result = await retryPeerNotification({ data: { staffToken: staffToken(), id } });
+      const feedback =
+        result.status === "provider_accepted"
+          ? "The email provider accepted the retry. Inbox delivery is not yet confirmed."
+          : result.status === "cancelled"
+            ? "The notification is no longer needed and was cancelled."
+            : result.status === "uncertain"
+              ? "Provider response is unknown. Check provider activity before another attempt."
+              : result.status === "failed"
+                ? `Retry failed: ${result.error}`
+                : "The notification was already processed. Its status has been refreshed.";
+      setMessage(feedback);
+      setRetryFeedback({ id, text: feedback });
+    } catch (error) {
+      const feedback = error instanceof Error ? error.message : "Could not retry notification.";
+      setMessage(feedback);
+      setRetryFeedback({ id, text: feedback });
+    } finally {
+      const token = staffToken();
+      const [nextRows, nextIssues] = await Promise.allSettled([
+        listReviewerMonitor({ data: { staffToken: token } }),
+        listPeerNotificationIssues({ data: { staffToken: token } }),
+      ]);
+      if (nextRows.status === "fulfilled") setRows(nextRows.value);
+      if (nextIssues.status === "fulfilled") setIssues(nextIssues.value);
+      setBusy(null);
+    }
+  }
   return (
-    <section className="mt-8 border border-border bg-card p-5" aria-label="Reviewer monitoring">
+    <section
+      id="reviewer-monitoring"
+      className="mt-8 border border-border bg-card p-5"
+      aria-label="Reviewer monitoring"
+    >
       <h2 className="font-serif text-2xl text-primary">Reviewer monitoring</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Current manuscript rounds · returned feedback and author notifications are tracked
@@ -131,9 +173,21 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
           </summary>
           <ul className="mt-2 space-y-1">
             {issues.map((issue) => (
-              <li key={issue.id}>
-                {issue.event} → {issue.recipient}: {issue.status} · {issue.attempts} attempts
-                {issue.last_error ? ` · ${issue.last_error}` : ""}
+              <li key={issue.id} className="flex flex-wrap items-baseline gap-x-2">
+                <span>
+                  {issue.event} → {issue.recipient}: {issue.status} · {issue.attempts} attempts
+                  {issue.last_error ? ` · ${issue.last_error}` : ""}
+                </span>
+                {issue.status === "failed" && (
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => void retryNotification(issue.id)}
+                    className="text-primary underline underline-offset-2 disabled:opacity-50"
+                  >
+                    {busy === issue.id ? "Retrying…" : "Retry notification"}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -224,17 +278,40 @@ export function ReviewerMonitor({ refreshKey }: { refreshKey: number }) {
                 </td>
                 <td className="p-2 text-xs">
                   {r.lastNotification ? (
-                    <span
-                      className={
-                        notificationStatus[r.lastNotification.status]?.className ??
-                        "text-muted-foreground"
-                      }
-                    >
-                      {notificationStatus[r.lastNotification.status]?.label ??
-                        r.lastNotification.status}
-                      <br />
-                      {new Date(r.lastNotification.at).toLocaleDateString()}
-                    </span>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-x-2">
+                        <span
+                          className={
+                            notificationStatus[r.lastNotification.status]?.className ??
+                            "text-muted-foreground"
+                          }
+                        >
+                          {notificationStatus[r.lastNotification.status]?.label ??
+                            r.lastNotification.status}
+                        </span>
+                        {r.lastNotification.status === "failed" && (
+                          <button
+                            type="button"
+                            disabled={busy !== null}
+                            onClick={() => void retryNotification(r.lastNotification!.id)}
+                            className="text-primary underline underline-offset-2 disabled:opacity-50"
+                          >
+                            {busy === r.lastNotification.id ? "Retrying…" : "Retry"}
+                          </button>
+                        )}
+                      </div>
+                      <div>{new Date(r.lastNotification.at).toLocaleDateString()}</div>
+                      {r.lastNotification.status === "failed" && r.lastNotification.error && (
+                        <p className="mt-1 max-w-56 break-words text-destructive">
+                          {r.lastNotification.error}
+                        </p>
+                      )}
+                      {retryFeedback?.id === r.lastNotification.id && (
+                        <p role="status" className="mt-1 max-w-56 break-words text-foreground">
+                          {retryFeedback.text}
+                        </p>
+                      )}
+                    </div>
                   ) : (
                     "—"
                   )}
