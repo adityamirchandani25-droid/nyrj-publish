@@ -20,8 +20,28 @@ export async function recentBrevoDeliveryEvents(): Promise<BrevoDeliveryEvent[]>
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as {
+        code?: unknown;
+        message?: unknown;
+      };
+      const detail =
+        typeof body.message === "string"
+          ? body.message.replaceAll(apiKey, "[redacted]").slice(0, 180)
+          : typeof body.code === "string"
+            ? body.code.slice(0, 80)
+            : "";
+      if (response.status === 401) {
+        throw new Error(
+          `Brevo refused this deployment's API key or server IP (401${detail ? `: ${detail}` : ""}). No emails were retried. Check the Production BREVO_API_KEY and Brevo IP authorization.`,
+        );
+      }
+      if (response.status === 403) {
+        throw new Error(
+          `Brevo denied delivery-log access (403${detail ? `: ${detail}` : ""}). The API key needs Transactional email access. No emails were retried.`,
+        );
+      }
       throw new Error(
-        `Could not check Brevo delivery events (${response.status}). Try again later.`,
+        `Could not check Brevo delivery events (${response.status}${detail ? `: ${detail}` : ""}). No emails were retried.`,
       );
     }
     const report = (await response.json()) as { events?: BrevoDeliveryEvent[] };
