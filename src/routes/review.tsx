@@ -86,7 +86,7 @@ async function uploadReviewFile(file: File | null, token: string, reviewerToken:
   return { filePath: signed.path, fileName: file.name };
 }
 
-function statusText(s: string) {
+function statusText(s: string, canSubmit = false) {
   switch (s) {
     case "invited":
       return "Awaiting your response";
@@ -99,7 +99,7 @@ function statusText(s: string) {
     case "sent_to_author":
       return "Feedback shared with the author";
     case "no_response":
-      return "Review window closed — deadline passed";
+      return canSubmit ? "Past due — you can still send your review" : "Review window closed — deadline passed";
     default:
       return s;
   }
@@ -240,7 +240,7 @@ function InvitePanel({ token, session }: { token: string; session: ReviewerSessi
           </a>
         )}
         <p className="mt-4 text-xs uppercase tracking-[0.2em] text-accent">
-          {statusText(invite.status)}
+          {statusText(invite.status, invite.canSubmit)}
         </p>
       </div>
 
@@ -277,20 +277,19 @@ function InvitePanel({ token, session }: { token: string; session: ReviewerSessi
         </p>
       )}
 
-      {(invite.status === "accepted" || invite.status === "review_received") &&
-        invite.submissionBlocker && (
+      {invite.canSubmit && invite.submissionBlocker && (
           <p className="border border-border bg-card p-6 text-sm text-muted-foreground">
             {invite.submissionBlocker}
           </p>
         )}
 
-      {(invite.status === "accepted" || invite.status === "review_received") &&
-        !invite.submissionBlocker && (
+      {invite.canSubmit && !invite.submissionBlocker && (
           <form onSubmit={send} className="border border-border bg-card p-6">
             <p className={label}>Your review</p>
             <p className="mt-2 text-sm text-muted-foreground">
               Upload an annotated paper, write comments, or do both. Provide at least one. Your
-              review is due by <strong>{due}</strong>.
+              review {invite.status === "no_response" ? "was due" : "is due"} by <strong>{due}</strong>.
+              {invite.status === "no_response" && " You can still send it while the paper is open."}
             </p>
             <textarea
               className={`${input} min-h-[240px]`}
@@ -832,7 +831,7 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
           <div key={r.assignmentId} className="border border-border bg-card p-6">
             <h3 className="font-serif text-2xl text-primary">{r.title}</h3>
             <p className="mt-1 text-xs uppercase tracking-[0.2em] text-accent">
-              {statusText(r.status)} ·{" "}
+              {statusText(r.status, r.canSubmit)} ·{" "}
               {new Date(r.dueAt).toLocaleDateString("en-US", {
                 month: "short",
                 day: "numeric",
@@ -873,11 +872,10 @@ function ReviewerInbox({ session, onLogout }: { session: ReviewerSession; onLogo
             )}
 
             <ReviewerFeedbackHistory token={r.token} reviewerToken={session.token} />
-            {(r.status === "accepted" || r.status === "review_received") && r.submissionBlocker && (
+            {r.canSubmit && r.submissionBlocker && (
               <p className="mt-4 text-sm text-muted-foreground">{r.submissionBlocker}</p>
             )}
-            {(r.status === "accepted" || r.status === "review_received") &&
-              !r.submissionBlocker && (
+            {r.canSubmit && !r.submissionBlocker && (
                 <div className="mt-4">
                   {openId === r.assignmentId ? (
                     <>
