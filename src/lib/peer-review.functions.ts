@@ -1,6 +1,6 @@
 import type { ReviewerSubmission } from "./reviewer-submission";
 import { reviewFeedbackSchema } from "./review-feedback";
-import { reviewSubmissionBlocker } from "./review-submission-availability";
+import { reviewSubmissionBlocker, reviewerMaySubmit } from "./review-submission-availability";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { MASTER_STAFF_EMAILS } from "./staff-recipients";
@@ -833,6 +833,7 @@ export type InviteView = {
   researchDomain: string;
   reviewerName: string;
   status: string;
+  canSubmit: boolean;
   dueAt: string;
   comments: string;
   reviewFileName: string | null;
@@ -848,7 +849,7 @@ async function loadInviteByToken(token: string, reviewerToken: string): Promise<
   const { data: a } = await supabaseAdmin
     .from("review_assignments")
     .select(
-      "id, submission_id, reviewer_email, reviewer_name, status, due_at, review_comments, review_file_name, review_submitted_at",
+      "id, submission_id, reviewer_email, reviewer_name, status, responded_at, due_at, review_comments, review_file_name, review_submitted_at",
     )
     .eq("invite_token", token)
     .maybeSingle();
@@ -859,6 +860,7 @@ async function loadInviteByToken(token: string, reviewerToken: string): Promise<
     reviewer_email: string;
     reviewer_name: string;
     status: string;
+    responded_at: string | null;
     due_at: string;
     review_comments: string;
     review_file_name: string | null;
@@ -883,7 +885,8 @@ async function loadInviteByToken(token: string, reviewerToken: string): Promise<
     decision?: string;
     deleted_at?: string | null;
   };
-  const canReadManuscript = ["accepted", "review_received", "sent_to_author"].includes(row.status);
+  const canSubmit = reviewerMaySubmit(row.status, row.responded_at);
+  const canReadManuscript = canSubmit || row.status === "sent_to_author";
   const { signedReviewerManuscript } = await import("./reviewer-resources.server");
   const { reviewerSubmission } = await import("./reviewer-submission.server");
   return {
@@ -895,6 +898,7 @@ async function loadInviteByToken(token: string, reviewerToken: string): Promise<
     researchDomain: s.research_domain ?? "",
     reviewerName: row.reviewer_name,
     status: row.status,
+    canSubmit,
     dueAt: row.due_at,
     comments: row.review_comments,
     reviewFileName: row.review_file_name,
@@ -1016,12 +1020,12 @@ export const createReviewUpload = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: assignment } = await supabaseAdmin
       .from("review_assignments")
-      .select("id, submission_id, reviewer_email, status")
+      .select("id, submission_id, reviewer_email, status, responded_at")
       .eq("invite_token", data.token)
       .maybeSingle();
     if (!assignment) throw new Error("This review link is not valid.");
     requireAssignmentOwner(reviewer.email, assignment.reviewer_email);
-    if (!["accepted", "review_received"].includes(assignment.status)) {
+    if (!reviewerMaySubmit(assignment.status, assignment.responded_at)) {
       throw new Error("This review is no longer open for uploads.");
     }
     const { data: paper, error: paperError } = await supabaseAdmin
@@ -1048,7 +1052,7 @@ export const submitReview = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: a } = await supabaseAdmin
       .from("review_assignments")
-      .select("id, submission_id, reviewer_email, reviewer_name, status, review_file_name")
+      .select("id, submission_id, reviewer_email, reviewer_name, status, responded_at, review_file_name")
       .eq("invite_token", data.token)
       .maybeSingle();
     if (!a) throw new Error("This review link is not valid.");
@@ -1058,10 +1062,11 @@ export const submitReview = createServerFn({ method: "POST" })
       reviewer_email: string;
       reviewer_name: string;
       status: string;
+      responded_at: string | null;
       review_file_name: string | null;
     };
     requireAssignmentOwner(reviewer.email, row.reviewer_email);
-    if (!["accepted", "review_received"].includes(row.status)) {
+    if (!reviewerMaySubmit(row.status, row.responded_at)) {
       throw new Error("Accept this review invitation before submitting your review.");
     }
 
@@ -1107,7 +1112,7 @@ export const submitReview = createServerFn({ method: "POST" })
         review_file_name: reviewFile?.review_file_name ?? null,
       } as never)
       .eq("id", row.id)
-      .in("status", ["accepted", "review_received"])
+      .in("status", ["accepted", "review_received", "no_response"])
       .select("id")
       .maybeSingle();
     if (updateError || !updated) {
@@ -1178,7 +1183,7 @@ export const listMyAssignments = createServerFn({ method: "POST" })
     const { data: rows } = await supabaseAdmin
       .from("review_assignments")
       .select(
-        "id, submission_id, invite_token, reviewer_name, status, due_at, review_comments, review_file_name, review_submitted_at",
+        "id, submission_id, invite_token, reviewer_name, status, responded_at, due_at, review_comments, review_file_name, review_submitted_at",
       )
       .eq("reviewer_email", reviewer.email)
       .order("assigned_at", { ascending: false })
@@ -1190,6 +1195,7 @@ export const listMyAssignments = createServerFn({ method: "POST" })
       invite_token: string;
       reviewer_name: string;
       status: string;
+      responded_at: string | null;
       due_at: string;
       review_comments: string;
       review_file_name: string | null;
@@ -1228,9 +1234,8 @@ export const listMyAssignments = createServerFn({ method: "POST" })
     return Promise.all(
       list.map(async (x) => {
         const s = byId.get(x.submission_id);
-        const canReadManuscript = ["accepted", "review_received", "sent_to_author"].includes(
-          x.status,
-        );
+        const canSubmit = reviewerMaySubmit(x.status, x.responded_at);
+        const canReadManuscript = canSubmit || x.status === "sent_to_author";
         return {
           submission: canReadManuscript ? await reviewerSubmission(x.submission_id) : null,
           assignmentId: x.id,
@@ -1242,6 +1247,7 @@ export const listMyAssignments = createServerFn({ method: "POST" })
           researchDomain: s?.research_domain ?? "",
           reviewerName: x.reviewer_name,
           status: x.status,
+          canSubmit,
           dueAt: x.due_at,
           comments: x.review_comments,
           reviewFileName: x.review_file_name,

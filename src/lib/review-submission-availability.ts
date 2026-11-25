@@ -8,3 +8,9 @@ export function reviewSubmissionBlocker(
   // is still active. The reviewer must still be able to send feedback to staff.
   return null;
 }
+
+/** A missed deadline does not discard work from a reviewer who accepted. */
+export function reviewerMaySubmit(status: string, respondedAt: string | null): boolean {
+  return status === "accepted" || status === "review_received" ||
+    (status === "no_response" && Boolean(respondedAt));
+}
