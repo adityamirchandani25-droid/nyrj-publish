@@ -4,6 +4,11 @@ import { brevoMessage, type RenderedProviderBody } from "./brevo-message";
 const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 const SEND_TIMEOUT_MS = 8_000;
 
+/** Brevo's IP allowlist rejects requests from hosts with rotating egress IPs. */
+export function unrecognisedIp(detail: string): string | null {
+  return /unrecogni[sz]ed IP address\s+([0-9a-f.:]+[0-9a-f])/i.exec(detail)?.[1] ?? null;
+}
+
 export async function deliverViaBrevo(body: Record<string, unknown>): Promise<string | null> {
   const apiKey = process.env["BREVO_API_KEY"]?.trim();
   const fromEmail = process.env["BREVO_FROM_EMAIL"]?.trim();
@@ -33,7 +38,10 @@ export async function deliverViaBrevo(body: Record<string, unknown>): Promise<st
     });
     if (!response.ok) {
       const detail = (await response.text().catch(() => "")).slice(0, 500);
-      const error = `Brevo ${response.status}: ${detail || response.statusText}`;
+      const blockedIp = response.status === 401 ? unrecognisedIp(detail) : null;
+      const error = blockedIp
+        ? `Brevo 401: blocked unrecognised server IP ${blockedIp}. Nothing was sent. Turn off IP blocking in Brevo (Security → Authorized IPs), then retry.`
+        : `Brevo ${response.status}: ${detail || response.statusText}`;
       if (response.status === 408 || response.status >= 500) {
         throw new DeliveryUncertainError(`${error} — check Brevo logs before retrying`);
       }

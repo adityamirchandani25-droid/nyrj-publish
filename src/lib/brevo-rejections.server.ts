@@ -1,4 +1,5 @@
 import type { BrevoDeliveryEvent } from "./brevo-rejections";
+import { unrecognisedIp } from "./email-templates/brevo-delivery.server";
 
 const BREVO_EVENTS_URL = "https://api.brevo.com/v3/smtp/statistics/events";
 
@@ -30,6 +31,12 @@ export async function recentBrevoDeliveryEvents(): Promise<BrevoDeliveryEvent[]>
           : typeof body.code === "string"
             ? body.code.slice(0, 80)
             : "";
+      const blockedIp = response.status === 401 ? unrecognisedIp(detail) : null;
+      if (blockedIp) {
+        throw new Error(
+          `Brevo blocked this server's IP (${blockedIp}) because it isn't on Brevo's authorized IP list. This host's IP changes between requests, so adding it won't stick: turn off IP blocking in Brevo (Security → Authorized IPs). No emails were retried.`,
+        );
+      }
       if (response.status === 401) {
         throw new Error(
           `Brevo refused this deployment's API key or server IP (401${detail ? `: ${detail}` : ""}). No emails were retried. Check the Production BREVO_API_KEY and Brevo IP authorization.`,
